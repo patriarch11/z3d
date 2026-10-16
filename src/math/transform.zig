@@ -1,26 +1,19 @@
 const Vec3f = @import("vec.zig").Vec3f;
 const Vec4f = @import("vec.zig").Vec4f;
 const Mat4f = @import("mat.zig").Mat4f;
+const Quatf = @import("quat.zig").Quatf;
 const mat = @import("mat.zig");
 
 pub fn makeTransform(
     translation: Vec3f,
-    rotation: Vec3f,
+    rotation: Quatf,
     scale: Vec3f,
 ) Mat4f {
     const translation_mat = mat.translate(translation);
-    const rotation_z_mat = mat.rotateZ(rotation.data[2]);
-    const rotation_y_mat = mat.rotateY(rotation.data[1]);
-    const rotation_x_mat = mat.rotateX(rotation.data[0]);
     const scale_mat = mat.scaling(scale);
 
-    const rotation_mat = Mat4f.mul(
-        Mat4f.mul(rotation_z_mat, 4, rotation_y_mat),
-        4,
-        rotation_x_mat,
-    );
     return Mat4f.mul(
-        Mat4f.mul(translation_mat, 4, rotation_mat),
+        Mat4f.mul(translation_mat, 4, rotation.toMat4()),
         4,
         scale_mat,
     );
