@@ -4,6 +4,7 @@ const Io = std.Io;
 
 test {
     _ = @import("math/_vec_test.zig");
+    _ = @import("math/vec.zig");
     _ = @import("math/mat_test.zig");
     _ = @import("math/transform_test.zig");
 }
