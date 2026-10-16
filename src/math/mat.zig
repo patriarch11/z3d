@@ -1,6 +1,6 @@
-const Vec = @import("vec.zig").Vec;
-const Vec3f = @import("vec.zig").Vec3f;
-const Vec4f = @import("vec.zig").Vec4f;
+const Vec = @import("_vec.zig").Vec;
+const Vec3f = @import("_vec.zig").Vec3f;
+const Vec4f = @import("_vec.zig").Vec4f;
 
 pub const Mat2f = Mat(2, 2, f32);
 pub const Mat3f = Mat(3, 3, f32);

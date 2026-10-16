@@ -1,6 +1,6 @@
 const std = @import("std");
 const trs = @import("transform.zig");
-const Vec3f = @import("vec.zig").Vec3f;
+const Vec3f = @import("_vec.zig").Vec3f;
 const Mat4f = @import("mat.zig").Mat4f;
 const Quatf = @import("quat.zig").Quatf;
 

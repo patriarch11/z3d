@@ -4,8 +4,8 @@ const Mat = @import("mat.zig").Mat;
 const Mat2f = @import("mat.zig").Mat2f;
 const Mat3f = @import("mat.zig").Mat3f;
 const Mat4f = @import("mat.zig").Mat4f;
-const Vec2f = @import("vec.zig").Vec2f;
-const Vec3f = @import("vec.zig").Vec3f;
+const Vec2f = @import("_vec.zig").Vec2f;
+const Vec3f = @import("_vec.zig").Vec3f;
 
 const Mat2x3 = Mat(2, 3, f32);
 const Mat2x4 = Mat(2, 4, f32);

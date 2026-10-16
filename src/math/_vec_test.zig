@@ -1,5 +1,5 @@
 const std = @import("std");
-const Vec3f = @import("vec.zig").Vec3f;
+const Vec3f = @import("_vec.zig").Vec3f;
 
 test "Vec3f.add should sum two vectors" {
     const a = Vec3f.init([3]f32{ 1, 3, 5 });

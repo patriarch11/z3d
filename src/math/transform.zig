@@ -1,5 +1,5 @@
-const Vec3f = @import("vec.zig").Vec3f;
-const Vec4f = @import("vec.zig").Vec4f;
+const Vec3f = @import("_vec.zig").Vec3f;
+const Vec4f = @import("_vec.zig").Vec4f;
 const Mat4f = @import("mat.zig").Mat4f;
 const Quatf = @import("quat.zig").Quatf;
 const mat = @import("mat.zig");

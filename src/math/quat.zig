@@ -1,4 +1,4 @@
-const Vec = @import("vec.zig").Vec;
+const Vec = @import("_vec.zig").Vec;
 const Mat = @import("mat.zig").Mat;
 
 pub const Quatf = Quaternion(f32);
