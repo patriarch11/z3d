@@ -44,11 +44,18 @@ const SendIndexFn = *const fn (
     usize,
 ) callconv(.c) ?ObjcId;
 
+const SendUsizeFn = *const fn (
+    ObjcId,
+    ObjcSel,
+    usize,
+) callconv(.c) void;
+
 const send: SendFn = @ptrCast(&objc_msgSend);
 const send_bool: SendBoolFn = @ptrCast(&objc_msgSend);
 const send_object: SendObjectFn = @ptrCast(&objc_msgSend);
 const send_void: SendVoidFn = @ptrCast(&objc_msgSend);
 const send_index: SendIndexFn = @ptrCast(&objc_msgSend);
+const send_usize: SendUsizeFn = @ptrCast(&objc_msgSend);
 
 const ObjcErr = error{
     CocoaWindowUnavailable,
@@ -74,6 +81,27 @@ const ObjcErr = error{
     ColorAttachmentsUnavailable,
     AttachmentIndexSelectorUnavailable,
     ColorAttachmentUnavailable,
+    SetTextureSelectorUnavailable,
+    SetLoadActionSelectorUnavailable,
+    SetStoreActionSelectorUnavailable,
+};
+
+pub const MTLLoadAction = enum(usize) {
+    dont_care = 0,
+    load = 1,
+    clear = 2,
+};
+
+pub const MTLStoreAction = enum(usize) {
+    dont_care = 0,
+    store = 1,
+};
+
+pub const MTLClearColor = extern struct {
+    red: f64,
+    green: f64,
+    blue: f64,
+    alpha: f64,
 };
 
 fn release(object: ObjcId) void {
@@ -325,17 +353,46 @@ pub const MTLRenderPassColorAttachmentDescriptorArray = struct {
 
         std.debug.print("ColorAttachment[0]: {*}\n", .{attachment});
 
-        return MTLRenderPassColorAttachmentDescriptor.init(attachment);
+        return try MTLRenderPassColorAttachmentDescriptor.init(attachment);
     }
 };
 
 pub const MTLRenderPassColorAttachmentDescriptor = struct {
     attachment: ObjcId,
+    set_texture_sel: ObjcSel,
+    set_load_action_sel: ObjcSel,
+    set_store_action_sel: ObjcSel,
 
     const Self = @This();
 
-    pub fn init(attachment: ObjcId) Self {
-        return .{ .attachment = attachment };
+    pub fn init(attachment: ObjcId) !Self {
+        const set_texture_sel = sel_registerName("setTexture:") orelse
+            return ObjcErr.SetTextureSelectorUnavailable;
+
+        const set_load_action_sel = sel_registerName("setLoadAction:") orelse
+            return ObjcErr.SetLoadActionSelectorUnavailable;
+
+        const set_store_action_sel = sel_registerName("setStoreAction:") orelse
+            return ObjcErr.SetStoreActionSelectorUnavailable;
+
+        return .{
+            .attachment = attachment,
+            .set_texture_sel = set_texture_sel,
+            .set_load_action_sel = set_load_action_sel,
+            .set_store_action_sel = set_store_action_sel,
+        };
+    }
+
+    pub fn setTexture(self: *const Self, texture: MTLTexture) void {
+        send_object(self.attachment, self.set_texture_sel, texture.texture);
+    }
+
+    pub fn setLoadAction(self: *const Self, action: MTLLoadAction) void {
+        send_usize(self.attachment, self.set_load_action_sel, @backingInt(action));
+    }
+
+    pub fn setStoreAction(self: *const Self, action: MTLStoreAction) void {
+        send_usize(self.attachment, self.set_store_action_sel, @backingInt(action));
     }
 };
 
@@ -379,10 +436,13 @@ pub fn main() !void {
 
     const mtl_render_pass_descriptor = try MTLRenderPassDescriptor.init();
 
-    const attachements_arr = try mtl_render_pass_descriptor.colorAttachments();
+    const attachments_arr = try mtl_render_pass_descriptor.colorAttachments();
 
-    const attachement = try attachements_arr.sub(0);
-    _ = attachement;
+    const attachment = try attachments_arr.sub(0);
+
+    attachment.setTexture(texture);
+    attachment.setLoadAction(.clear);
+    attachment.setStoreAction(.store);
 
     while (!window.shouldClose()) {
         glfw.pollEvents();
