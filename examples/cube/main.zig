@@ -56,6 +56,12 @@ const SendClearColorFn = *const fn (
     MTLClearColor,
 ) callconv(.c) void;
 
+const SendObjectReturnFn = *const fn (
+    ObjcId,
+    ObjcSel,
+    ObjcId,
+) callconv(.c) ?ObjcId;
+
 const send: SendFn = @ptrCast(&objc_msgSend);
 const send_bool: SendBoolFn = @ptrCast(&objc_msgSend);
 const send_object: SendObjectFn = @ptrCast(&objc_msgSend);
@@ -63,6 +69,7 @@ const send_void: SendVoidFn = @ptrCast(&objc_msgSend);
 const send_index: SendIndexFn = @ptrCast(&objc_msgSend);
 const send_usize: SendUsizeFn = @ptrCast(&objc_msgSend);
 const send_clear_color: SendClearColorFn = @ptrCast(&objc_msgSend);
+const send_object_return: SendObjectReturnFn = @ptrCast(&objc_msgSend);
 
 const ObjcErr = error{
     CocoaWindowUnavailable,
@@ -94,6 +101,8 @@ const ObjcErr = error{
     SetClearColorSelectorUnavailable,
     CommandBufferCreationFailed,
     CommandBufferSelectorUnavailable,
+    RenderEncoderSelectorUnavailable,
+    RenderEncoderCreationFailed,
 };
 
 pub const MTLLoadAction = enum(usize) {
@@ -304,17 +313,48 @@ pub const MTLCommandQueue = struct {
         const buffer = send(self.command_queue, self.cmd_buffer_sel) orelse
             return ObjcErr.CommandBufferCreationFailed;
 
-        return MTLCommandBuffer.init(buffer);
+        return try MTLCommandBuffer.init(buffer);
     }
 };
 
 pub const MTLCommandBuffer = struct {
     buffer: ObjcId,
+    render_cmd_encoder_with_desc_sel: ObjcSel,
 
     const Self = @This();
 
-    pub fn init(buffer: ObjcId) Self {
-        return .{ .buffer = buffer };
+    pub fn init(buffer: ObjcId) !Self {
+        const render_cmd_encoder_with_desc_sel = sel_registerName(
+            "renderCommandEncoderWithDescriptor:",
+        ) orelse return ObjcErr.RenderEncoderSelectorUnavailable;
+
+        return .{
+            .buffer = buffer,
+            .render_cmd_encoder_with_desc_sel = render_cmd_encoder_with_desc_sel,
+        };
+    }
+
+    pub fn renderCommandEncoder(
+        self: *const Self,
+        descriptor: MTLRenderPassDescriptor,
+    ) !MTLRenderCommandEncoder {
+        const encoder = send_object_return(
+            self.buffer,
+            self.render_cmd_encoder_with_desc_sel,
+            descriptor.descriptor,
+        ) orelse return ObjcErr.RenderEncoderCreationFailed;
+
+        return try MTLRenderCommandEncoder.init(encoder);
+    }
+};
+
+pub const MTLRenderCommandEncoder = struct {
+    encoder: ObjcId,
+
+    const Self = @This();
+
+    pub fn init(encoder: ObjcId) !Self {
+        return .{ .encoder = encoder };
     }
 };
 
@@ -500,6 +540,14 @@ pub fn main() !void {
         .green = 0.2,
         .blue = 0.8,
         .alpha = 1.0,
+    });
+
+    const encoder = try cmd_buffer.renderCommandEncoder(
+        mtl_render_pass_descriptor,
+    );
+
+    std.debug.print("MTLRenderCommandEncoder: {*}\n", .{
+        encoder.encoder,
     });
 
     while (!window.shouldClose()) {
