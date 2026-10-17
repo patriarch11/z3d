@@ -842,7 +842,7 @@ pub fn main() !void {
 
     const mtl_library = try MTLLibrary.init(
         mtl_device,
-        "examples/cube/shaders.metallib",
+        "zig-out/shaders.metallib",
     );
     defer mtl_library.deinit();
 
