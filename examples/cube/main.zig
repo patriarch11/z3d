@@ -92,6 +92,8 @@ const ObjcErr = error{
     SetLoadActionSelectorUnavailable,
     SetStoreActionSelectorUnavailable,
     SetClearColorSelectorUnavailable,
+    CommandBufferCreationFailed,
+    CommandBufferSelectorUnavailable,
 };
 
 pub const MTLLoadAction = enum(usize) {
@@ -274,21 +276,45 @@ pub const MTLDevice = struct {
 
         std.debug.print("MTLCommandQueue: {*}\n", .{command_queue});
 
-        return MTLCommandQueue.init(command_queue);
+        return try MTLCommandQueue.init(command_queue);
     }
 };
 
 pub const MTLCommandQueue = struct {
     command_queue: ObjcId,
+    cmd_buffer_sel: ObjcSel,
 
     const Self = @This();
 
-    pub fn init(command_queue: ObjcId) Self {
-        return .{ .command_queue = command_queue };
+    pub fn init(command_queue: ObjcId) !Self {
+        const cmd_buffer_sel = sel_registerName("commandBuffer") orelse
+            return ObjcErr.CommandBufferSelectorUnavailable;
+
+        return .{
+            .command_queue = command_queue,
+            .cmd_buffer_sel = cmd_buffer_sel,
+        };
     }
 
     pub fn deinit(self: *const Self) void {
         release(self.command_queue);
+    }
+
+    pub fn commandBuffer(self: *const Self) !MTLCommandBuffer {
+        const buffer = send(self.command_queue, self.cmd_buffer_sel) orelse
+            return ObjcErr.CommandBufferCreationFailed;
+
+        return MTLCommandBuffer.init(buffer);
+    }
+};
+
+pub const MTLCommandBuffer = struct {
+    buffer: ObjcId,
+
+    const Self = @This();
+
+    pub fn init(buffer: ObjcId) Self {
+        return .{ .buffer = buffer };
     }
 };
 
@@ -441,6 +467,10 @@ pub fn main() !void {
 
     const mtl_cmd_q = try mtl_device.newCommandQueue();
     defer mtl_cmd_q.deinit();
+
+    const cmd_buffer = try mtl_cmd_q.commandBuffer();
+
+    std.debug.print("MTLCommandBuffer: {*}\n", .{cmd_buffer.buffer});
 
     ns_view.setWantsLayer(true);
     ns_view.setLayer(metal_layer);
