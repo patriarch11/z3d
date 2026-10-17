@@ -84,6 +84,13 @@ const SendObjectErrorFn = *const fn (
     ObjcId,
     ?*?NsError,
 ) callconv(.c) ?ObjcId;
+const SendDrawPrimitivesFn = *const fn (
+    ObjcId,
+    ObjcSel,
+    usize,
+    usize,
+    usize,
+) callconv(.c) void;
 
 const send: SendFn = @ptrCast(&objc_msgSend);
 const send_bool: SendBoolFn = @ptrCast(&objc_msgSend);
@@ -96,6 +103,7 @@ const send_object_return: SendObjectReturnFn = @ptrCast(&objc_msgSend);
 const send_size: SendSizeFn = @ptrCast(&objc_msgSend);
 const send_cstring: SendCStringFn = @ptrCast(&objc_msgSend);
 const send_object_error: SendObjectErrorFn = @ptrCast(&objc_msgSend);
+const send_draw_primitives: SendDrawPrimitivesFn = @ptrCast(&objc_msgSend);
 
 const ObjcErr = error{
     CocoaWindowUnavailable,
@@ -151,6 +159,8 @@ const ObjcErr = error{
     SetPixelFormatSelectorUnavailable,
     NewRenderPipelineStateSelectorUnavailable,
     RenderPipelineStateCreationFailed,
+    SetRenderPipelineStateSelectorUnavailable,
+    DrawPrimitivesSelectorUnavailable,
 };
 
 pub const MTLLoadAction = enum(usize) {
@@ -179,6 +189,14 @@ pub const MTLPixelFormat = enum(usize) {
 pub const CGSize = extern struct {
     width: f64,
     height: f64,
+};
+
+pub const MTLPrimitiveType = enum(usize) {
+    point = 0,
+    line = 1,
+    line_strip = 2,
+    triangle = 3,
+    triangle_strip = 4,
 };
 
 fn release(object: ObjcId) void {
@@ -474,21 +492,58 @@ pub const MTLCommandBuffer = struct {
 pub const MTLRenderCommandEncoder = struct {
     encoder: ObjcId,
     end_edncoding_sel: ObjcSel,
+    set_render_pipeline_state_sel: ObjcSel,
+    draw_primitives_sel: ObjcSel,
 
     const Self = @This();
 
     pub fn init(encoder: ObjcId) !Self {
         const end_edncoding_sel = sel_registerName("endEncoding") orelse
             return ObjcErr.EndEncodingSelectorUnavailable;
+        const set_render_pipeline_state_sel = sel_registerName(
+            "setRenderPipelineState:",
+        ) orelse return ObjcErr.SetRenderPipelineStateSelectorUnavailable;
+
+        const draw_primitives_sel = sel_registerName(
+            "drawPrimitives:vertexStart:vertexCount:",
+        ) orelse return ObjcErr.DrawPrimitivesSelectorUnavailable;
 
         return .{
             .encoder = encoder,
             .end_edncoding_sel = end_edncoding_sel,
+            .set_render_pipeline_state_sel = set_render_pipeline_state_sel,
+            .draw_primitives_sel = draw_primitives_sel,
         };
     }
 
     pub fn endEncoding(self: *const Self) void {
         send_void(self.encoder, self.end_edncoding_sel);
+    }
+
+    pub fn setRenderPipelineState(
+        self: *const Self,
+        pipeline: MTLRenderPipelineState,
+    ) void {
+        send_object(
+            self.encoder,
+            self.set_render_pipeline_state_sel,
+            pipeline.pipeline,
+        );
+    }
+
+    pub fn drawPrimitives(
+        self: *const Self,
+        primitive: MTLPrimitiveType,
+        vertex_start: usize,
+        vertex_count: usize,
+    ) void {
+        send_draw_primitives(
+            self.encoder,
+            self.draw_primitives_sel,
+            @backingInt(primitive),
+            vertex_start,
+            vertex_count,
+        );
     }
 };
 
@@ -879,9 +934,21 @@ pub fn main() !void {
     ns_view.setLayer(metal_layer);
     metal_layer.setDevice(mtl_device);
 
-    var n: f64 = 0.0;
+    var r: f64 = 0.0;
+    var g: f64 = 0.0;
+    var b: f64 = 0.0;
+    var a: f64 = 0.0;
 
-    while (!window.shouldClose()) : (n += 0.005) {
+    while (!window.shouldClose()) : ({
+        r += 0.0035;
+        g += 0.0015;
+        b += 0.0025;
+        a += 0.0005;
+    }) {
+        if (r >= 2) {
+            r, g, b, a = .{ 0, 0, 0, 0 };
+        }
+
         glfw.pollEvents();
 
         const pool = objc_autoreleasePoolPush();
@@ -913,15 +980,18 @@ pub fn main() !void {
         attachment.setLoadAction(.clear);
         attachment.setStoreAction(.store);
         attachment.setClearColor(.{
-            .red = 0.1,
-            .green = n,
-            .blue = 0.8,
-            .alpha = 1.0,
+            .red = r,
+            .green = g,
+            .blue = b,
+            .alpha = a,
         });
 
         const encoder = try cmd_buffer.renderCommandEncoder(
             mtl_render_pass_descriptor,
         );
+
+        encoder.setRenderPipelineState(pipeline);
+        encoder.drawPrimitives(.triangle, 0, 3);
 
         encoder.endEncoding();
         cmd_buffer.presentDrawable(drawable);
