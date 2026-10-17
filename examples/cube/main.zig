@@ -71,6 +71,19 @@ const SendSizeFn = *const fn (
     CGSize,
 ) callconv(.c) void;
 
+const SendCStringFn = *const fn (
+    ObjcId,
+    ObjcSel,
+    [*:0]const u8,
+) callconv(.c) ?ObjcId;
+
+const SendObjectErrorFn = *const fn (
+    ObjcId,
+    ObjcSel,
+    ObjcId,
+    ?*?ObjcId,
+) callconv(.c) ?ObjcId;
+
 const send: SendFn = @ptrCast(&objc_msgSend);
 const send_bool: SendBoolFn = @ptrCast(&objc_msgSend);
 const send_object: SendObjectFn = @ptrCast(&objc_msgSend);
@@ -80,6 +93,8 @@ const send_usize: SendUsizeFn = @ptrCast(&objc_msgSend);
 const send_clear_color: SendClearColorFn = @ptrCast(&objc_msgSend);
 const send_object_return: SendObjectReturnFn = @ptrCast(&objc_msgSend);
 const send_size: SendSizeFn = @ptrCast(&objc_msgSend);
+const send_cstring: SendCStringFn = @ptrCast(&objc_msgSend);
+const send_object_error: SendObjectErrorFn = @ptrCast(&objc_msgSend);
 
 const ObjcErr = error{
     CocoaWindowUnavailable,
@@ -117,6 +132,11 @@ const ObjcErr = error{
     PresentDrawableSelectorUnavailable,
     CommitSelectorUnavailable,
     SetDrawableSizeSelectorUnavailable,
+    NSStringSelectorUnavailable,
+    NSStringCreationFailed,
+    NewLibrarySelectorUnavailable,
+    LibraryCreationFailed,
+    NSStringClassUnavailable,
 };
 
 pub const MTLLoadAction = enum(usize) {
@@ -146,6 +166,18 @@ fn release(object: ObjcId) void {
     const selector = sel_registerName("release") orelse unreachable;
     send_void(object, selector);
 }
+
+fn nsString(value: [*:0]const u8) !ObjcId {
+    const cls = objc_getClass("NSString") orelse
+        return ObjcErr.NSStringClassUnavailable;
+
+    const selector = sel_registerName("stringWithUTF8String:") orelse
+        return ObjcErr.NSStringSelectorUnavailable;
+
+    return send_cstring(cls, selector, value) orelse
+        ObjcErr.NSStringCreationFailed;
+}
+
 pub const NsWindow = struct {
     ns_window: ObjcId,
     content_view_sel: ObjcSel,
@@ -531,6 +563,37 @@ pub const MTLRenderPassColorAttachmentDescriptor = struct {
     }
 };
 
+pub const MTLLibrary = struct {
+    library: ObjcId,
+
+    const Self = @This();
+
+    pub fn init(
+        device: MTLDevice,
+        path: [*:0]const u8,
+    ) !Self {
+        const selector = sel_registerName("newLibraryWithFile:error:") orelse
+            return ObjcErr.NewLibrarySelectorUnavailable;
+
+        const ns_path = try nsString(path);
+
+        var ns_error: ?ObjcId = null;
+
+        const library = send_object_error(
+            device.device,
+            selector,
+            ns_path,
+            &ns_error,
+        ) orelse return ObjcErr.LibraryCreationFailed;
+
+        return .{ .library = library };
+    }
+
+    pub fn deinit(self: *const Self) void {
+        release(self.library);
+    }
+};
+
 pub fn main() !void {
     try glfw.init();
     defer glfw.terminate();
@@ -546,12 +609,23 @@ pub fn main() !void {
     );
     defer window.destroy();
 
+    const init_pool = objc_autoreleasePoolPush();
+    defer objc_autoreleasePoolPop(init_pool);
+
     const ns_window = try NsWindow.init(window);
     const ns_view = try ns_window.contentView();
     const metal_layer = try CAMetalLayer.init();
 
     const mtl_device = try MTLDevice.init();
     defer mtl_device.deinit();
+
+    const mtl_library = try MTLLibrary.init(
+        mtl_device,
+        "examples/cube/shaders.metallib",
+    );
+    defer mtl_library.deinit();
+
+    std.debug.print("MTLLibrary: {*}\n", .{mtl_library.library});
 
     const mtl_cmd_q = try mtl_device.newCommandQueue();
     defer mtl_cmd_q.deinit();
