@@ -138,6 +138,16 @@ const ObjcErr = error{
     LibraryCreationFailed,
     NSStringClassUnavailable,
     NewFunctionSelectorUnavailable,
+    RenderPipelineDescriptorClassUnavailable,
+    AllocSelectorUnavailable,
+    InitSelectorUnavailable,
+    RenderPipelineDescriptorCreationFailed,
+    PipelineColorAttachmentsSelectorUnavailable,
+    PipelineColorAttachmentsUnavailable,
+    SetVertexFunctionSelectorUnavailable,
+    SetFragmentFunctionSelectorUnavailable,
+    PipelineColorAttachmentUnavailable,
+    SetPixelFormatSelectorUnavailable,
 };
 
 pub const MTLLoadAction = enum(usize) {
@@ -156,6 +166,11 @@ pub const MTLClearColor = extern struct {
     green: f64,
     blue: f64,
     alpha: f64,
+};
+
+pub const MTLPixelFormat = enum(usize) {
+    invalid = 0,
+    bgra8_unorm = 80,
 };
 
 pub const CGSize = extern struct {
@@ -257,7 +272,7 @@ pub const CAMetalLayer = struct {
             return ObjcErr.SetDeviceSelectorUnavailable;
         const next_drawable_sel = sel_registerName("nextDrawable") orelse
             return ObjcErr.NextDrawableSelectorUnavailable;
-        const set_drawable_size_sel = sel_registerName("nextDrawable") orelse
+        const set_drawable_size_sel = sel_registerName("setDrawableSize:") orelse
             return ObjcErr.SetDrawableSizeSelectorUnavailable;
 
         return .{
@@ -564,6 +579,120 @@ pub const MTLRenderPassColorAttachmentDescriptor = struct {
     }
 };
 
+pub const MTLRenderPipelineColorAttachmentDescriptorArray = struct {
+    attachments: ObjcId,
+    index_sel: ObjcSel,
+
+    const Self = @This();
+
+    pub fn init(attachments: ObjcId) !Self {
+        const index_sel = sel_registerName("objectAtIndexedSubscript:") orelse
+            return ObjcErr.AttachmentIndexSelectorUnavailable;
+
+        return .{
+            .attachments = attachments,
+            .index_sel = index_sel,
+        };
+    }
+
+    pub fn sub(self: *const Self, idx: usize) !MTLRenderPipelineColorAttachmentDescriptor {
+        const attachment = send_index(
+            self.attachments,
+            self.index_sel,
+            idx,
+        ) orelse return ObjcErr.PipelineColorAttachmentUnavailable;
+
+        return MTLRenderPipelineColorAttachmentDescriptor.init(attachment);
+    }
+};
+
+pub const MTLRenderPipelineColorAttachmentDescriptor = struct {
+    attachment: ObjcId,
+    set_pixel_format_sel: ObjcSel,
+
+    const Self = @This();
+
+    pub fn init(attachment: ObjcId) !Self {
+        const set_pixel_format_sel = sel_registerName("setPixelFormat:") orelse
+            return ObjcErr.SetPixelFormatSelectorUnavailable;
+
+        return .{
+            .attachment = attachment,
+            .set_pixel_format_sel = set_pixel_format_sel,
+        };
+    }
+
+    pub fn setPixelFormat(self: *const Self, format: MTLPixelFormat) void {
+        send_usize(
+            self.attachment,
+            self.set_pixel_format_sel,
+            @backingInt(format),
+        );
+    }
+};
+
+pub const MTLRenderPipelineDescriptor = struct {
+    descriptor: ObjcId,
+    set_vertex_function_sel: ObjcSel,
+    set_fragment_function_sel: ObjcSel,
+    color_attachments_sel: ObjcSel,
+
+    const Self = @This();
+
+    pub fn init() !Self {
+        const cls = objc_getClass("MTLRenderPipelineDescriptor") orelse
+            return ObjcErr.RenderPipelineDescriptorClassUnavailable;
+
+        const alloc_sel = sel_registerName("alloc") orelse
+            return ObjcErr.AllocSelectorUnavailable;
+
+        const init_sel = sel_registerName("init") orelse
+            return ObjcErr.InitSelectorUnavailable;
+
+        const allocated = send(cls, alloc_sel) orelse
+            return ObjcErr.RenderPipelineDescriptorCreationFailed;
+
+        const descriptor = send(allocated, init_sel) orelse
+            return ObjcErr.RenderPipelineDescriptorCreationFailed;
+        errdefer release(descriptor);
+
+        const set_vertex_function_sel = sel_registerName("setVertexFunction:") orelse
+            return ObjcErr.SetVertexFunctionSelectorUnavailable;
+
+        const set_fragment_function_sel = sel_registerName("setFragmentFunction:") orelse
+            return ObjcErr.SetFragmentFunctionSelectorUnavailable;
+
+        const color_attachments_sel = sel_registerName("colorAttachments") orelse
+            return ObjcErr.PipelineColorAttachmentsSelectorUnavailable;
+
+        return .{
+            .descriptor = descriptor,
+            .set_vertex_function_sel = set_vertex_function_sel,
+            .set_fragment_function_sel = set_fragment_function_sel,
+            .color_attachments_sel = color_attachments_sel,
+        };
+    }
+
+    pub fn deinit(self: *const Self) void {
+        release(self.descriptor);
+    }
+
+    pub fn setVertexFunction(self: *const Self, function: MTLFunction) void {
+        send_object(self.descriptor, self.set_vertex_function_sel, function.function);
+    }
+
+    pub fn setFragmentFunction(self: *const Self, function: MTLFunction) void {
+        send_object(self.descriptor, self.set_fragment_function_sel, function.function);
+    }
+
+    pub fn colorAttachments(self: *const Self) !MTLRenderPipelineColorAttachmentDescriptorArray {
+        const attachments = send(self.descriptor, self.color_attachments_sel) orelse
+            return ObjcErr.PipelineColorAttachmentsUnavailable;
+
+        return MTLRenderPipelineColorAttachmentDescriptorArray.init(attachments);
+    }
+};
+
 pub const MTLLibrary = struct {
     library: ObjcId,
     new_function_with_name_sel: ObjcSel,
@@ -669,6 +798,17 @@ pub fn main() !void {
 
     const fragment_fn = try mtl_library.newFunctionWithName("fragment_main");
     defer fragment_fn.deinit();
+
+    const pipeline_desc = try MTLRenderPipelineDescriptor.init();
+    defer pipeline_desc.deinit();
+
+    pipeline_desc.setVertexFunction(vertex_fn);
+    pipeline_desc.setFragmentFunction(fragment_fn);
+
+    const pipeline_attachments = try pipeline_desc.colorAttachments();
+    const pipeline_attachment = try pipeline_attachments.sub(0);
+
+    pipeline_attachment.setPixelFormat(.bgra8_unorm);
 
     std.debug.print("Vertex function: {*}\n", .{vertex_fn.function});
     std.debug.print("Fragment function: {*}\n", .{fragment_fn.function});
