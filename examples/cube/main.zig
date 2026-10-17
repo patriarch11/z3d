@@ -103,6 +103,9 @@ const ObjcErr = error{
     CommandBufferSelectorUnavailable,
     RenderEncoderSelectorUnavailable,
     RenderEncoderCreationFailed,
+    EndEncodingSelectorUnavailable,
+    PresentDrawableSelectorUnavailable,
+    CommitSelectorUnavailable,
 };
 
 pub const MTLLoadAction = enum(usize) {
@@ -320,6 +323,8 @@ pub const MTLCommandQueue = struct {
 pub const MTLCommandBuffer = struct {
     buffer: ObjcId,
     render_cmd_encoder_with_desc_sel: ObjcSel,
+    present_drawable_sel: ObjcSel,
+    commit_sel: ObjcSel,
 
     const Self = @This();
 
@@ -328,9 +333,17 @@ pub const MTLCommandBuffer = struct {
             "renderCommandEncoderWithDescriptor:",
         ) orelse return ObjcErr.RenderEncoderSelectorUnavailable;
 
+        const present_drawable_sel = sel_registerName("presentDrawable:") orelse
+            return ObjcErr.PresentDrawableSelectorUnavailable;
+
+        const commit_sel = sel_registerName("commit") orelse
+            return ObjcErr.CommitSelectorUnavailable;
+
         return .{
             .buffer = buffer,
             .render_cmd_encoder_with_desc_sel = render_cmd_encoder_with_desc_sel,
+            .present_drawable_sel = present_drawable_sel,
+            .commit_sel = commit_sel,
         };
     }
 
@@ -346,15 +359,37 @@ pub const MTLCommandBuffer = struct {
 
         return try MTLRenderCommandEncoder.init(encoder);
     }
+
+    pub fn presentDrawable(
+        self: *const Self,
+        drawable: CAMetalDrawable,
+    ) void {
+        send_object(self.buffer, self.present_drawable_sel, drawable.drawable);
+    }
+
+    pub fn commit(self: *const Self) void {
+        send_void(self.buffer, self.commit_sel);
+    }
 };
 
 pub const MTLRenderCommandEncoder = struct {
     encoder: ObjcId,
+    end_edncoding_sel: ObjcSel,
 
     const Self = @This();
 
     pub fn init(encoder: ObjcId) !Self {
-        return .{ .encoder = encoder };
+        const end_edncoding_sel = sel_registerName("endEncoding") orelse
+            return ObjcErr.EndEncodingSelectorUnavailable;
+
+        return .{
+            .encoder = encoder,
+            .end_edncoding_sel = end_edncoding_sel,
+        };
+    }
+
+    pub fn endEncoding(self: *const Self) void {
+        send_void(self.encoder, self.end_edncoding_sel);
     }
 };
 
@@ -549,6 +584,10 @@ pub fn main() !void {
     std.debug.print("MTLRenderCommandEncoder: {*}\n", .{
         encoder.encoder,
     });
+
+    encoder.endEncoding();
+    cmd_buffer.presentDrawable(drawable);
+    cmd_buffer.commit();
 
     while (!window.shouldClose()) {
         glfw.pollEvents();
