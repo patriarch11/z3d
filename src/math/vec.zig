@@ -27,16 +27,16 @@ pub inline fn swizzle(
 }
 
 pub inline fn dot2(v0: Vec, v1: Vec) f32 {
-    const v0v1 = v0 * v1; // | x0*x1 | y0 * y1 | -- | -- |
-    return v0v1[0] + v0v1[1];
+    const m = v0 * v1; // | x0*x1 | y0 * y1 | -- | -- |
+    return m[0] + m[1];
 }
 test "z3dmath.dot2" {
     try std.testing.expectEqual(18, dot2(vec2(12, 3), vec2(1, 2)));
 }
 
 pub inline fn dot3(v0: Vec, v1: Vec) f32 {
-    const v0v1 = v0 * v1;
-    return v0v1[0] + v0v1[1] + v0v1[2];
+    const m = v0 * v1;
+    return m[0] + m[1] + m[2];
 }
 test "z3dmath.dot3" {
     try std.testing.expectEqual(26, dot3(vec3(12, 3, 4), vec3(1, 2, 2)));
@@ -59,4 +59,34 @@ test "z3dmath.cross3" {
 
     try std.testing.expectEqual(vec3(0, 0, 1), cross3(v0, v1));
     try std.testing.expectEqual(0, dot3(cross3(v0, v1), v0));
+}
+
+pub inline fn lenSq2(v: Vec) f32 {
+    return dot2(v, v);
+}
+pub inline fn lenSq3(v: Vec) f32 {
+    return dot3(v, v);
+}
+pub inline fn lenSq4(v: Vec) f32 {
+    return dot4(v, v);
+}
+
+pub inline fn len2(v: Vec) f32 {
+    return @sqrt(dot2(v, v));
+}
+pub inline fn len3(v: Vec) f32 {
+    return @sqrt(dot3(v, v));
+}
+pub inline fn len4(v: Vec) f32 {
+    return @sqrt(dot4(v, v));
+}
+
+pub inline fn normalize2(v: Vec) Vec {
+    return v / len2(v);
+}
+pub inline fn normalize3(v: Vec) Vec {
+    return v / len3(v);
+}
+pub inline fn normalize4(v: Vec) Vec {
+    return v / len4(v);
 }
