@@ -143,8 +143,6 @@ pub const NsWindow = struct {
         const ns_window = glfw.getCocoaWindow(window) orelse
             return ObjcErr.CocoaWindowUnavailable;
 
-        std.debug.print("NSWindow: {*}\n", .{ns_window});
-
         const content_view_sel = sel_registerName("contentView") orelse
             return ObjcErr.ContentViewSelectorUnavailable;
 
@@ -157,8 +155,6 @@ pub const NsWindow = struct {
     pub fn contentView(self: *const Self) !NsView {
         const objc_ns_view = send(self.ns_window, self.content_view_sel) orelse
             return ObjcErr.ContentViewUnavailable;
-
-        std.debug.print("NSView: {*}\n", .{objc_ns_view});
 
         return NsView.init(objc_ns_view);
     }
@@ -205,15 +201,11 @@ pub const CAMetalLayer = struct {
         const metal_layer_class = objc_getClass("CAMetalLayer") orelse
             return ObjcErr.CAMetalLayerClassUnavailable;
 
-        std.debug.print("CAMetalLayer class: {*}\n", .{metal_layer_class});
-
         const layer_sel = sel_registerName("layer") orelse
             return ObjcErr.CAMetalLayerSelectorUnavailable;
 
         const metal_layer = send(metal_layer_class, layer_sel) orelse
             return ObjcErr.CAMetalLayerCreationFailed;
-
-        std.debug.print("CAMetalLayer: {*}\n", .{metal_layer});
 
         const set_device_sel = sel_registerName("setDevice:") orelse
             return ObjcErr.SetDeviceSelectorUnavailable;
@@ -273,8 +265,6 @@ pub const MTLDevice = struct {
         const device = MTLCreateSystemDefaultDevice() orelse
             return ObjcErr.MTLDeviceUnavailable;
 
-        std.debug.print("MTLDevice: {*}\n", .{device});
-
         const new_queue_sel = sel_registerName("newCommandQueue") orelse
             return ObjcErr.CommandQueueSelectorUnavailable;
 
@@ -288,8 +278,6 @@ pub const MTLDevice = struct {
     pub fn newCommandQueue(self: *const Self) !MTLCommandQueue {
         const command_queue = send(self.device, self.new_queue_sel) orelse
             return ObjcErr.CommandQueueCreationFailed;
-
-        std.debug.print("MTLCommandQueue: {*}\n", .{command_queue});
 
         return try MTLCommandQueue.init(command_queue);
     }
@@ -422,8 +410,6 @@ pub const MTLRenderPassDescriptor = struct {
         const descriptor = send(render_pass_class, descriptor_sel) orelse
             return ObjcErr.RenderPassCreationFailed;
 
-        std.debug.print("MTLRenderPassDescriptor: {*}\n", .{descriptor});
-
         const color_attachements_sel = sel_registerName("colorAttachments") orelse
             return ObjcErr.ColorAttachmentsSelectorUnavailable;
 
@@ -462,8 +448,6 @@ pub const MTLRenderPassColorAttachmentDescriptorArray = struct {
             self.index_sel,
             idx,
         ) orelse return ObjcErr.ColorAttachmentUnavailable;
-
-        std.debug.print("ColorAttachment[0]: {*}\n", .{attachment});
 
         return try MTLRenderPassColorAttachmentDescriptor.init(attachment);
     }
@@ -543,6 +527,9 @@ pub fn main() !void {
     const mtl_device = try MTLDevice.init();
     defer mtl_device.deinit();
 
+    const mtl_cmd_q = try mtl_device.newCommandQueue();
+    defer mtl_cmd_q.deinit();
+
     ns_view.setWantsLayer(true);
     ns_view.setLayer(metal_layer);
     metal_layer.setDevice(mtl_device);
@@ -555,18 +542,12 @@ pub fn main() !void {
         const pool = objc_autoreleasePoolPush();
         defer objc_autoreleasePoolPop(pool);
 
-        const mtl_cmd_q = try mtl_device.newCommandQueue();
-        defer mtl_cmd_q.deinit();
-
         const cmd_buffer = try mtl_cmd_q.commandBuffer();
-        std.debug.print("MTLCommandBuffer: {*}\n", .{cmd_buffer.buffer});
 
         const drawable = (try metal_layer.nextDrawable()) orelse
             return ObjcErr.DrawableUnavailable;
-        std.debug.print("CAMetalDrawable: {*}\n", .{drawable.drawable});
 
         const texture = try drawable.texture();
-        std.debug.print("MTLTexture: {*}\n", .{texture.texture});
 
         const mtl_render_pass_descriptor = try MTLRenderPassDescriptor.init();
         const attachments_arr = try mtl_render_pass_descriptor.colorAttachments();
@@ -585,9 +566,6 @@ pub fn main() !void {
         const encoder = try cmd_buffer.renderCommandEncoder(
             mtl_render_pass_descriptor,
         );
-        std.debug.print("MTLRenderCommandEncoder: {*}\n", .{
-            encoder.encoder,
-        });
 
         encoder.endEncoding();
         cmd_buffer.presentDrawable(drawable);
