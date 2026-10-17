@@ -60,6 +60,9 @@ const ObjcErr = error{
     TextureSelectorUnavailable,
     TextureUnavailable,
     DrawableUnavailable,
+    RenderPassClassUnavailable,
+    RenderPassSelectorUnavailable,
+    RenderPassCreationFailed,
 };
 
 fn release(object: ObjcId) void {
@@ -252,6 +255,27 @@ pub const MTLTexture = struct {
     }
 };
 
+pub const MTLRenderPassDescriptor = struct {
+    descriptor: ObjcSel,
+
+    const Self = @This();
+
+    pub fn init() !Self {
+        const render_pass_class = objc_getClass("MTLRenderPassDescriptor") orelse
+            return ObjcErr.RenderPassClassUnavailable;
+
+        const descriptor_sel = sel_registerName("renderPassDescriptor") orelse
+            return ObjcErr.RenderPassSelectorUnavailable;
+
+        const descriptor = send(render_pass_class, descriptor_sel) orelse
+            return ObjcErr.RenderPassCreationFailed;
+
+        std.debug.print("MTLRenderPassDescriptor: {*}\n", .{descriptor});
+
+        return .{ .descriptor = descriptor };
+    }
+};
+
 pub fn main() !void {
     try glfw.init();
     defer glfw.terminate();
@@ -289,6 +313,9 @@ pub fn main() !void {
     const texture = try drawable.texture();
 
     std.debug.print("MTLTexture: {*}\n", .{texture.texture});
+
+    const mtl_render_pass_descriptor = try MTLRenderPassDescriptor.init();
+    _ = mtl_render_pass_descriptor;
 
     while (!window.shouldClose()) {
         glfw.pollEvents();
