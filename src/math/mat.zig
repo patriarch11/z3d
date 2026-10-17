@@ -289,56 +289,71 @@ pub fn fromQuat(q: quat.Quat) Mat {
     const xy, const xz, const yz = .{ -1, -2, -3 };
     const xw, const yw, const zw = .{ -1, -2, -3 };
 
-    // ----
-    // r0 (1 - 2(y^2 + z^2), 2(xy + zw), 2(xz - yw), 0)
-    // -----
-    const r0_signs = vec.f32x4(1, 1, -1, 1); // r02: xz + yw -> xz + (-yw)
-    const r0_correction = vec.f32x4(-1, 1, 1, 1); // r00: (y^2 + z^2) -> -(y^2 + z^2)
-    const r0_base = vec.f32x4(1, 0, 0, 0); // r00: 1 + (-2(y^2 + z^2))
+    const row_params = struct {
+        signs: vec.F32x4,
+        correction: vec.F32x4,
+        base: vec.F32x4,
+        products_mask: [4]i32,
+        w_products_mask: [4]i32,
+    };
 
-    // zig fmt: off
-    // (y^2 + z^2), (xy + zw), (xz - yw), 0)
-    var r0 =
-        @shuffle(f32, xx_yy_zz, xy_xz_yz, [4]i32{yy, xy, xz, 0}) +
-        @shuffle(f32, xx_yy_zz, xw_yw_zw, [4]i32{zz, zw, yw, 0}) * r0_signs;
-    // zig fmt: on
+    const calc_row = struct {
+        fn calc(
+            comptime p: row_params,
+            squares: vec.F32x4,
+            products: vec.F32x4,
+            w_products: vec.F32x4,
+        ) vec.F32x4 {
+            const r = @shuffle(f32, squares, products, p.products_mask) +
+                @shuffle(f32, squares, w_products, p.w_products_mask) * p.signs;
 
-    r0 = vec.applyMask(r0, vec.mask_xyz);
-    r0 = r0_base + vec.splat(2) * (r0 * r0_correction);
+            return p.base + vec.splat(2) *
+                (vec.applyMask(r, vec.mask_xyz) * p.correction);
+        }
+    }.calc;
 
-    // ----
-    // r1 (2(xy - zw), 1 - 2(x^2 + z^2), 2(yz + xw), 0)
-    // -----
-    const r1_signs = vec.f32x4(-1, 1, 1, 1);
-    const r1_correction = vec.f32x4(1, -1, 1, 1);
-    const r1_base = vec.f32x4(0, 1, 0, 0);
+    const rows = [3]row_params{
+        // ----
+        // r0 (1 - 2(y^2 + z^2), 2(xy + zw), 2(xz - yw), 0)
+        // -----
+        .{
+            .signs = .{ 1, 1, -1, 1 }, // r02: xz + yw -> xz + (-yw)
+            .correction = .{ -1, 1, 1, 1 }, // r00: (y^2 + z^2) -> -(y^2 + z^2)
+            .base = .{ 1, 0, 0, 0 },
+            .products_mask = .{ yy, xy, xz, 0 },
+            .w_products_mask = .{ zz, zw, yw, 0 },
+        },
+        // ----
+        // r1 (2(xy - zw), 1 - 2(x^2 + z^2), 2(yz + xw), 0)
+        // -----
+        .{
+            .signs = .{ -1, 1, 1, 1 },
+            .correction = .{ 1, -1, 1, 1 },
+            .base = .{ 0, 1, 0, 0 },
+            .products_mask = .{ xy, xx, yz, 0 },
+            .w_products_mask = .{ zw, zz, xw, 0 },
+        },
+        // ----
+        // r2 (2(xz + yw), 2(yz - xw), 1 - 2(x^2 + y^2), 0)
+        // -----
+        .{
+            .signs = .{ 1, -1, 1, 1 },
+            .correction = .{ 1, 1, -1, 1 },
+            .base = .{ 0, 0, 1, 0 },
+            .products_mask = .{ xz, yz, xx, 0 },
+            .w_products_mask = .{ yw, xw, yy, 0 },
+        },
+    };
 
-    // zig fmt: off
-    var r1 =
-        @shuffle(f32, xx_yy_zz, xy_xz_yz, [4]i32{xy, xx, yz, 0}) +
-        @shuffle(f32, xx_yy_zz, xw_yw_zw, [4]i32{zw, zz, xw, 0}) * r1_signs;
-    // zig fmt: on
+    var res: Mat = undefined;
 
-    r1 = vec.applyMask(r1, vec.mask_xyz);
-    r1 = r1_base + vec.splat(2) * (r1 * r1_correction);
+    inline for (0..3) |i| {
+        res[i] = calc_row(rows[i], xx_yy_zz, xy_xz_yz, xw_yw_zw);
+    }
 
-    // ----
-    // r2 (2(xz + yw), 2(yz - xw), 1 - 2(x^2 + y^2), 0)
-    // -----
-    const r2_signs = vec.f32x4(1, -1, 1, 1);
-    const r2_correction = vec.f32x4(1, 1, -1, 1);
-    const r2_base = vec.f32x4(0, 0, 1, 0);
+    res[3] = quat.identity;
 
-    // zig fmt: off
-    var r2 =
-        @shuffle(f32, xx_yy_zz, xy_xz_yz, [4]i32{xz, yz, xx, 0}) +
-        @shuffle(f32, xx_yy_zz, xw_yw_zw, [4]i32{yw, xw, yy, 0}) * r2_signs;
-    // zig fmt: on
-
-    r2 = vec.applyMask(r2, vec.mask_xyz);
-    r2 = r2_base + vec.splat(2) * (r2 * r2_correction);
-
-    return .{ r0, r1, r2, quat.identity };
+    return res;
 }
 test "fromQuat" {
     const toRad = std.math.degreesToRadians;
