@@ -459,3 +459,20 @@ pub fn translation(t: vec.Vec) Mat {
         .{ t[0], t[1], t[2], 1 },
     };
 }
+
+pub fn perspective(
+    fov_y: f32,
+    aspect: f32,
+    near: f32,
+    far: f32,
+) Mat {
+    const f = 1.0 / @tan(fov_y * 0.5);
+    const d = near - far;
+
+    return .{
+        .{ f / aspect, 0, 0, 0 },
+        .{ 0, f, 0, 0 },
+        .{ 0, 0, far / d, -1 },
+        .{ 0, 0, near * far / d, 0 },
+    };
+}
