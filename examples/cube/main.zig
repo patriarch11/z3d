@@ -50,12 +50,19 @@ const SendUsizeFn = *const fn (
     usize,
 ) callconv(.c) void;
 
+const SendClearColorFn = *const fn (
+    ObjcId,
+    ObjcSel,
+    MTLClearColor,
+) callconv(.c) void;
+
 const send: SendFn = @ptrCast(&objc_msgSend);
 const send_bool: SendBoolFn = @ptrCast(&objc_msgSend);
 const send_object: SendObjectFn = @ptrCast(&objc_msgSend);
 const send_void: SendVoidFn = @ptrCast(&objc_msgSend);
 const send_index: SendIndexFn = @ptrCast(&objc_msgSend);
 const send_usize: SendUsizeFn = @ptrCast(&objc_msgSend);
+const send_clear_color: SendClearColorFn = @ptrCast(&objc_msgSend);
 
 const ObjcErr = error{
     CocoaWindowUnavailable,
@@ -84,6 +91,7 @@ const ObjcErr = error{
     SetTextureSelectorUnavailable,
     SetLoadActionSelectorUnavailable,
     SetStoreActionSelectorUnavailable,
+    SetClearColorSelectorUnavailable,
 };
 
 pub const MTLLoadAction = enum(usize) {
@@ -296,7 +304,7 @@ pub const MTLTexture = struct {
 
 pub const MTLRenderPassDescriptor = struct {
     descriptor: ObjcId,
-    color_attachements_sel: ObjcSel,
+    color_attachments_sel: ObjcSel,
 
     const Self = @This();
 
@@ -317,15 +325,15 @@ pub const MTLRenderPassDescriptor = struct {
 
         return .{
             .descriptor = descriptor,
-            .color_attachements_sel = color_attachements_sel,
+            .color_attachments_sel = color_attachements_sel,
         };
     }
 
     pub fn colorAttachments(self: *const Self) !MTLRenderPassColorAttachmentDescriptorArray {
-        const attachements = send(self.descriptor, self.color_attachements_sel) orelse
+        const attachments = send(self.descriptor, self.color_attachments_sel) orelse
             return ObjcErr.ColorAttachmentsUnavailable;
 
-        return MTLRenderPassColorAttachmentDescriptorArray.init(attachements);
+        return MTLRenderPassColorAttachmentDescriptorArray.init(attachments);
     }
 };
 
@@ -362,6 +370,7 @@ pub const MTLRenderPassColorAttachmentDescriptor = struct {
     set_texture_sel: ObjcSel,
     set_load_action_sel: ObjcSel,
     set_store_action_sel: ObjcSel,
+    set_clear_color_sel: ObjcSel,
 
     const Self = @This();
 
@@ -375,11 +384,15 @@ pub const MTLRenderPassColorAttachmentDescriptor = struct {
         const set_store_action_sel = sel_registerName("setStoreAction:") orelse
             return ObjcErr.SetStoreActionSelectorUnavailable;
 
+        const set_clear_color_sel = sel_registerName("setClearColor:") orelse
+            return ObjcErr.SetClearColorSelectorUnavailable;
+
         return .{
             .attachment = attachment,
             .set_texture_sel = set_texture_sel,
             .set_load_action_sel = set_load_action_sel,
             .set_store_action_sel = set_store_action_sel,
+            .set_clear_color_sel = set_clear_color_sel,
         };
     }
 
@@ -393,6 +406,14 @@ pub const MTLRenderPassColorAttachmentDescriptor = struct {
 
     pub fn setStoreAction(self: *const Self, action: MTLStoreAction) void {
         send_usize(self.attachment, self.set_store_action_sel, @backingInt(action));
+    }
+
+    pub fn setClearColor(self: *const Self, color: MTLClearColor) void {
+        send_clear_color(
+            self.attachment,
+            self.set_clear_color_sel,
+            color,
+        );
     }
 };
 
@@ -443,6 +464,13 @@ pub fn main() !void {
     attachment.setTexture(texture);
     attachment.setLoadAction(.clear);
     attachment.setStoreAction(.store);
+
+    attachment.setClearColor(.{
+        .red = 0.1,
+        .green = 0.2,
+        .blue = 0.8,
+        .alpha = 1.0,
+    });
 
     while (!window.shouldClose()) {
         glfw.pollEvents();
