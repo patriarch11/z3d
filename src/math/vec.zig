@@ -33,8 +33,23 @@ pub const F32x4Comp = enum {
     }
 };
 
-pub inline fn swizzle(v: F32x4, mask: [4]i32) F32x4 {
+pub inline fn swizzle_mask(v: F32x4, mask: [4]i32) F32x4 {
     return @shuffle(f32, v, undefined, mask);
+}
+
+pub inline fn swizzle(
+    v: F32x4,
+    comptime x: F32x4Comp,
+    comptime y: F32x4Comp,
+    comptime z: F32x4Comp,
+    comptime w: F32x4Comp,
+) F32x4 {
+    return @shuffle(
+        f32,
+        v,
+        undefined,
+        [4]i32{ @backingInt(x), @backingInt(y), @backingInt(z), @backingInt(w) },
+    );
 }
 
 pub inline fn splat(e: f32) F32x4 {
@@ -87,8 +102,8 @@ pub inline fn cross3(v0: Vec, v1: Vec) Vec {
     const mask_zxyw = F32x4Comp.mask(.z, .x, .y, .w);
     // zig fmt: off
     return applyMask(
-        swizzle(v0, mask_yzxw) * swizzle(v1, mask_zxyw) -
-        swizzle(v0, mask_zxyw) * swizzle(v1, mask_yzxw),
+        swizzle_mask(v0, mask_yzxw) * swizzle_mask(v1, mask_zxyw) -
+        swizzle_mask(v0, mask_zxyw) * swizzle_mask(v1, mask_yzxw),
         mask_xyz,
     );
     // zig fmt: on
