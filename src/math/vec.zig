@@ -1,11 +1,11 @@
 const std = @import("std");
 
-pub const F32x4 = @Vector(4, f32);
-pub const Boolx4 = @Vector(4, bool);
+pub const veclen = 4;
+
+pub const F32x4 = @Vector(veclen, f32);
+pub const Boolx4 = @Vector(veclen, bool);
 
 pub const Vec = F32x4;
-
-pub const veclen = 4;
 
 pub const mask_xy = Boolx4{ true, true, false, false };
 pub const mask_xyz = Boolx4{ true, true, true, false };
@@ -54,7 +54,7 @@ pub inline fn dot2(v0: Vec, v1: Vec) F32x4 {
     const m = v0 * v1; // | x0*x1 | y0 * y1 | -- | -- |
     return splat(m[0] + m[1]);
 }
-test "z3dmath.dot2" {
+test "z3dmath.vec.dot2" {
     try test_util.expectVecApproxEqAbs(
         splat(-7),
         dot2(f32x4(1, -2, 23, -299.3), f32x4(3, 5, 23, -299.3)),
@@ -65,7 +65,7 @@ pub inline fn dot3(v0: Vec, v1: Vec) F32x4 {
     const m = v0 * v1;
     return splat(m[0] + m[1] + m[2]);
 }
-test "z3dmath.dot3" {
+test "z3dmath.vec.dot3" {
     try test_util.expectVecApproxEqAbs(
         splat(5),
         dot3(f32x4(1, -2, 4, -299.3), f32x4(3, 5, 3, -299.3)),
@@ -75,7 +75,7 @@ test "z3dmath.dot3" {
 pub inline fn dot4(v0: Vec, v1: Vec) F32x4 {
     return splat(@reduce(.Add, v0 * v1));
 }
-test "z3dmath.dot4" {
+test "z3dmath.vec.dot4" {
     try test_util.expectVecApproxEqAbs(
         splat(2),
         dot4(f32x4(1, -2, 4, 6), f32x4(3, 5, 3, -0.5)),
@@ -94,7 +94,7 @@ pub inline fn cross3(v0: Vec, v1: Vec) Vec {
     // zig fmt: on
 
 }
-test "z3dmath.cross3" {
+test "z3dmath.vec.cross3" {
     const cases = .{
         .{ f32x4(1, 0, 0, -23.01), f32x4(0, 1, 0, -23.01), f32x4(0, 0, 1, 0) },
         .{ f32x4(0, 1, 0, 3.01), f32x4(1, 0, 0, -23.01), f32x4(0, 0, -1, 0) },
@@ -122,7 +122,7 @@ pub inline fn lenSq3(v: Vec) F32x4 {
 pub inline fn lenSq4(v: Vec) F32x4 {
     return dot4(v, v);
 }
-test "z3dmath.lenSq2" {
+test "z3dmath.vec.lenSq2" {
     const cases = .{
         .{ f32x4(3, 4, 12, 3), splat(25) },
         .{ f32x4(0, 0, 12, 3), splat(0) },
@@ -133,7 +133,7 @@ test "z3dmath.lenSq2" {
         try test_util.expectVecApproxEqAbs(case[1], lenSq2(case[0]));
     }
 }
-test "z3dmath.lenSq3" {
+test "z3dmath.vec.lenSq3" {
     const cases = .{
         .{ f32x4(2, 3, 6, 10), splat(49.0) },
         .{ f32x4(0, 0, 0, 15), splat(0.0) },
@@ -144,7 +144,7 @@ test "z3dmath.lenSq3" {
         try test_util.expectVecApproxEqAbs(case[1], lenSq3(case[0]));
     }
 }
-test "z3dmath.lenSq4" {
+test "z3dmath.vec.lenSq4" {
     const cases = .{
         .{ f32x4(1, 2, 3, 4), splat(30.0) },
         .{ f32x4(0, 0, 0, 0), splat(0.0) },
@@ -165,7 +165,7 @@ pub inline fn len3(v: Vec) F32x4 {
 pub inline fn len4(v: Vec) F32x4 {
     return @sqrt(dot4(v, v));
 }
-test "z3dmath.len2" {
+test "z3dmath.vec.len2" {
     const cases = .{
         .{ f32x4(3, 4, 1, -10), splat(5.0) },
         .{ f32x4(0, 0, 12, -22.312), splat(0.0) },
@@ -176,7 +176,7 @@ test "z3dmath.len2" {
         try test_util.expectVecApproxEqAbs(case[1], len2(case[0]));
     }
 }
-test "z3dmath.len3" {
+test "z3dmath.vec.len3" {
     const cases = .{
         .{ f32x4(2, 3, 6, -12.33), splat(7.0) },
         .{ f32x4(0, 0, 0, -12.33), splat(0.0) },
@@ -187,7 +187,7 @@ test "z3dmath.len3" {
         try test_util.expectVecApproxEqAbs(case[1], len3(case[0]));
     }
 }
-test "z3dmath.len4" {
+test "z3dmath.vec.len4" {
     const cases = .{
         .{ f32x4(1, 2, 2, 4), splat(5.0) },
         .{ f32x4(0, 0, 0, 0), splat(0.0) },
@@ -208,7 +208,7 @@ pub inline fn normalize3(v: Vec) Vec {
 pub inline fn normalize4(v: Vec) Vec {
     return v / len4(v);
 }
-test "z3dmath.normalize2" {
+test "z3dmath.vec.normalize2" {
     const cases = .{
         .{ f32x4(3, 4, 0, 0), f32x4(0.6, 0.8, 0, 0) },
         .{ f32x4(5, 0, 0, 0), f32x4(1, 0, 0, 0) },
@@ -223,7 +223,7 @@ test "z3dmath.normalize2" {
         try std.testing.expectApproxEqAbs(@as(f32, 1), len2(result)[0], 1e-6);
     }
 }
-test "z3dmath.normalize3" {
+test "z3dmath.vec.normalize3" {
     const cases = .{
         .{ f32x4(0, 3, 4, 0), f32x4(0, 0.6, 0.8, 0) },
         .{ f32x4(5, 0, 0, 0), f32x4(1, 0, 0, 0) },
@@ -238,7 +238,7 @@ test "z3dmath.normalize3" {
         try std.testing.expectApproxEqAbs(@as(f32, 1), len3(result)[0], 1e-6);
     }
 }
-test "z3dmath.normalize4" {
+test "z3dmath.vec.normalize4" {
     const cases = .{
         .{ f32x4(1, 2, 2, 4), f32x4(0.2, 0.4, 0.4, 0.8) },
         .{ f32x4(5, 0, 0, 0), f32x4(1, 0, 0, 0) },
