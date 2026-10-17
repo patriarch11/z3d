@@ -65,6 +65,12 @@ const SendObjectReturnFn = *const fn (
     ObjcId,
 ) callconv(.c) ?ObjcId;
 
+const SendSizeFn = *const fn (
+    ObjcId,
+    ObjcSel,
+    CGSize,
+) callconv(.c) void;
+
 const send: SendFn = @ptrCast(&objc_msgSend);
 const send_bool: SendBoolFn = @ptrCast(&objc_msgSend);
 const send_object: SendObjectFn = @ptrCast(&objc_msgSend);
@@ -73,6 +79,7 @@ const send_index: SendIndexFn = @ptrCast(&objc_msgSend);
 const send_usize: SendUsizeFn = @ptrCast(&objc_msgSend);
 const send_clear_color: SendClearColorFn = @ptrCast(&objc_msgSend);
 const send_object_return: SendObjectReturnFn = @ptrCast(&objc_msgSend);
+const send_size: SendSizeFn = @ptrCast(&objc_msgSend);
 
 const ObjcErr = error{
     CocoaWindowUnavailable,
@@ -109,6 +116,7 @@ const ObjcErr = error{
     EndEncodingSelectorUnavailable,
     PresentDrawableSelectorUnavailable,
     CommitSelectorUnavailable,
+    SetDrawableSizeSelectorUnavailable,
 };
 
 pub const MTLLoadAction = enum(usize) {
@@ -127,6 +135,11 @@ pub const MTLClearColor = extern struct {
     green: f64,
     blue: f64,
     alpha: f64,
+};
+
+pub const CGSize = extern struct {
+    width: f64,
+    height: f64,
 };
 
 fn release(object: ObjcId) void {
@@ -194,6 +207,7 @@ pub const CAMetalLayer = struct {
     metal_layer: ObjcId,
     set_device_sel: ObjcSel,
     next_drawable_sel: ObjcSel,
+    set_drawable_size_sel: ObjcSel,
 
     const Self = @This();
 
@@ -203,20 +217,21 @@ pub const CAMetalLayer = struct {
 
         const layer_sel = sel_registerName("layer") orelse
             return ObjcErr.CAMetalLayerSelectorUnavailable;
-
         const metal_layer = send(metal_layer_class, layer_sel) orelse
             return ObjcErr.CAMetalLayerCreationFailed;
 
         const set_device_sel = sel_registerName("setDevice:") orelse
             return ObjcErr.SetDeviceSelectorUnavailable;
-
         const next_drawable_sel = sel_registerName("nextDrawable") orelse
             return ObjcErr.NextDrawableSelectorUnavailable;
+        const set_drawable_size_sel = sel_registerName("nextDrawable") orelse
+            return ObjcErr.SetDrawableSizeSelectorUnavailable;
 
         return .{
             .metal_layer = metal_layer,
             .set_device_sel = set_device_sel,
             .next_drawable_sel = next_drawable_sel,
+            .set_drawable_size_sel = set_drawable_size_sel,
         };
     }
 
@@ -231,6 +246,17 @@ pub const CAMetalLayer = struct {
         ) orelse return null;
 
         return try CAMetalDrawable.init(drawable);
+    }
+
+    pub fn setDrawableSize(
+        self: *const Self,
+        width: f64,
+        height: f64,
+    ) void {
+        send_size(self.metal_layer, self.set_drawable_size_sel, .{
+            .width = width,
+            .height = height,
+        });
     }
 };
 
@@ -536,13 +562,24 @@ pub fn main() !void {
 
     var n: f64 = 0.0;
 
-    while (!window.shouldClose()) : (n += 0.001) {
+    while (!window.shouldClose()) : (n += 0.005) {
         glfw.pollEvents();
 
         const pool = objc_autoreleasePoolPush();
         defer objc_autoreleasePoolPop(pool);
 
         const cmd_buffer = try mtl_cmd_q.commandBuffer();
+
+        const framebuffer_size = window.getFramebufferSize();
+
+        if (framebuffer_size[0] <= 0 or framebuffer_size[1] <= 0) {
+            continue;
+        }
+
+        metal_layer.setDrawableSize(
+            @floatFromInt(framebuffer_size[0]),
+            @floatFromInt(framebuffer_size[1]),
+        );
 
         const drawable = (try metal_layer.nextDrawable()) orelse
             return ObjcErr.DrawableUnavailable;
