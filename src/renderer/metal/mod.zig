@@ -8,6 +8,7 @@ const send_clear_color: types.SendClearColorFn = @ptrCast(&objc.objc_msgSend);
 const send_size: types.SendSizeFn = @ptrCast(&objc.objc_msgSend);
 const send_draw_primitives: types.SendDrawPrimitivesFn = @ptrCast(&objc.objc_msgSend);
 const send_new_buffer: types.SendNewBufferFn = @ptrCast(&objc.objc_msgSend);
+const send_vertex_buffer: types.SendVertexBufferFn = @ptrCast(&objc.objc_msgSend);
 
 pub const Error = error{
     CAMetalLayerCreationFailed,
@@ -283,6 +284,7 @@ pub const MTLRenderCommandEncoder = struct {
     end_edncoding_sel: objc.Sel,
     set_render_pipeline_state_sel: objc.Sel,
     draw_primitives_sel: objc.Sel,
+    set_vertex_buffer_sel: objc.Sel,
 
     const Self = @This();
 
@@ -292,9 +294,11 @@ pub const MTLRenderCommandEncoder = struct {
         const set_render_pipeline_state_sel = objc.sel_registerName(
             "setRenderPipelineState:",
         ) orelse return objc.Error.SelectorUnavailable;
-
         const draw_primitives_sel = objc.sel_registerName(
             "drawPrimitives:vertexStart:vertexCount:",
+        ) orelse return objc.Error.SelectorUnavailable;
+        const set_vertex_buffer_sel = objc.sel_registerName(
+            "setVertexBuffer:offset:atIndex:",
         ) orelse return objc.Error.SelectorUnavailable;
 
         return .{
@@ -302,6 +306,7 @@ pub const MTLRenderCommandEncoder = struct {
             .end_edncoding_sel = end_edncoding_sel,
             .set_render_pipeline_state_sel = set_render_pipeline_state_sel,
             .draw_primitives_sel = draw_primitives_sel,
+            .set_vertex_buffer_sel = set_vertex_buffer_sel,
         };
     }
 
@@ -332,6 +337,21 @@ pub const MTLRenderCommandEncoder = struct {
             @backingInt(primitive),
             vertex_start,
             vertex_count,
+        );
+    }
+
+    pub fn setVertexBuffer(
+        self: *const Self,
+        buffer: MTLBuffer,
+        offset: usize,
+        index: usize,
+    ) void {
+        send_vertex_buffer(
+            self.encoder,
+            self.set_vertex_buffer_sel,
+            buffer.buffer,
+            offset,
+            index,
         );
     }
 };

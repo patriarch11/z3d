@@ -29,6 +29,14 @@ pub const SendNewBufferFn = *const fn (
     usize,
 ) callconv(.c) ?objc.Id;
 
+pub const SendVertexBufferFn = *const fn (
+    objc.Id,
+    objc.Sel,
+    objc.Id,
+    usize,
+    usize,
+) callconv(.c) void;
+
 pub const MTLLoadAction = enum(usize) {
     dont_care = 0,
     load = 1,
