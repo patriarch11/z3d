@@ -31,6 +31,7 @@ pub fn build(b: *std.Build) void {
     cube.root_module.linkLibrary(zglfw.artifact("glfw"));
     cube.root_module.linkSystemLibrary("objc", .{});
     cube.root_module.linkFramework("QuartzCore", .{}); // CAMetalLayer
+    cube.root_module.linkFramework("Metal", .{}); // MTLCreateSystemDefaultDevice
 
     const cube_step = b.step("cube", "Run cube example");
     const run_cube = b.addRunArtifact(cube);

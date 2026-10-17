@@ -14,6 +14,8 @@ extern "objc" fn objc_getClass(
 
 extern "objc" fn objc_msgSend() callconv(.c) void;
 
+extern "Metal" fn MTLCreateSystemDefaultDevice() ?ObjcId;
+
 const SendFn = *const fn (
     ObjcId,
     ObjcSel,
@@ -44,6 +46,7 @@ const ObjcErr = error{
     CAMetalLayerCreationFailed,
     WantsLayerSelectorUnavailable,
     SetLayerSelectorUnavailable,
+    MTLDeviceUnavailable,
 };
 
 pub const NsWindow = struct {
@@ -151,6 +154,11 @@ pub fn main() !void {
 
     ns_view.setWantsLayer(true);
     ns_view.setLayer(metal_layer);
+
+    const device = MTLCreateSystemDefaultDevice() orelse
+        return error.MetalDeviceUnavailable;
+
+    std.debug.print("MTLDevice: {*}\n", .{device});
 
     while (!window.shouldClose()) {
         glfw.pollEvents();
