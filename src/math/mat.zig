@@ -450,3 +450,12 @@ test "fromQuat" {
         }
     }
 }
+
+pub fn translation(t: vec.Vec) Mat {
+    return .{
+        .{ 1, 0, 0, 0 },
+        .{ 0, 1, 0, 0 },
+        .{ 0, 0, 1, 0 },
+        .{ t[0], t[1], t[2], 1 },
+    };
+}
