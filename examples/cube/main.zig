@@ -55,6 +55,8 @@ const ObjcErr = error{
     MTLDeviceUnavailable,
     CommandQueueSelectorUnavailable,
     CommandQueueCreationFailed,
+    SetDeviceSelectorUnavailable,
+    NextDrawableSelectorUnavailable,
 };
 
 fn release(object: ObjcId) void {
@@ -125,6 +127,7 @@ pub const NsView = struct {
 pub const CAMetalLayer = struct {
     metal_layer: ObjcId,
     set_device_sel: ObjcSel,
+    next_drawable_sel: ObjcSel,
 
     const Self = @This();
 
@@ -143,16 +146,39 @@ pub const CAMetalLayer = struct {
         std.debug.print("CAMetalLayer: {*}\n", .{metal_layer});
 
         const set_device_sel = sel_registerName("setDevice:") orelse
-            return error.SetDeviceSelectorUnavailable;
+            return ObjcErr.SetDeviceSelectorUnavailable;
+
+        const next_drawable_sel = sel_registerName("nextDrawable") orelse
+            return ObjcErr.NextDrawableSelectorUnavailable;
 
         return .{
             .metal_layer = metal_layer,
             .set_device_sel = set_device_sel,
+            .next_drawable_sel = next_drawable_sel,
         };
     }
 
     pub fn setDevice(self: *const Self, device: MTLDevice) void {
         send_object(self.metal_layer, self.set_device_sel, device.device);
+    }
+
+    pub fn nextDrawable(self: *const Self) ?CAMetalDrawable {
+        const drawable = send(
+            self.metal_layer,
+            self.next_drawable_sel,
+        ) orelse return null;
+
+        return CAMetalDrawable.init(drawable);
+    }
+};
+
+pub const CAMetalDrawable = struct {
+    drawable: ObjcId,
+
+    const Self = @This();
+
+    pub fn init(drawable: ObjcId) Self {
+        return .{ .drawable = drawable };
     }
 };
 
@@ -230,6 +256,11 @@ pub fn main() !void {
     ns_view.setWantsLayer(true);
     ns_view.setLayer(metal_layer);
     metal_layer.setDevice(mtl_device);
+
+    const drawable = metal_layer.nextDrawable() orelse
+        return error.DrawableUnavailable;
+
+    std.debug.print("CAMetalDrawable: {*}\n", .{drawable.drawable});
 
     while (!window.shouldClose()) {
         glfw.pollEvents();
