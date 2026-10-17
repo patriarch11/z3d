@@ -33,9 +33,15 @@ const SendObjectFn = *const fn (
     ObjcId,
 ) callconv(.c) void;
 
+const SendVoidFn = *const fn (
+    ObjcId,
+    ObjcSel,
+) callconv(.c) void;
+
 const send: SendFn = @ptrCast(&objc_msgSend);
 const send_bool: SendBoolFn = @ptrCast(&objc_msgSend);
 const send_object: SendObjectFn = @ptrCast(&objc_msgSend);
+const send_void: SendVoidFn = @ptrCast(&objc_msgSend);
 
 const ObjcErr = error{
     CocoaWindowUnavailable,
@@ -51,6 +57,10 @@ const ObjcErr = error{
     CommandQueueCreationFailed,
 };
 
+fn release(object: ObjcId) void {
+    const selector = sel_registerName("release") orelse unreachable;
+    send_void(object, selector);
+}
 pub const NsWindow = struct {
     ns_window: ObjcId,
     content_view_sel: ObjcSel,
@@ -164,6 +174,10 @@ pub const MTLDevice = struct {
         return .{ .device = device, .new_queue_sel = new_queue_sel };
     }
 
+    pub fn deinit(self: *const Self) void {
+        release(self.device);
+    }
+
     pub fn newCommandQueue(self: *const Self) !MTLCommandQueue {
         const command_queue = send(self.device, self.new_queue_sel) orelse
             return ObjcErr.CommandQueueCreationFailed;
@@ -179,8 +193,12 @@ pub const MTLCommandQueue = struct {
 
     const Self = @This();
 
-    pub fn init(command_queue: ObjcId) Self {
+    pub fn init(command_queue: ObjcId) !Self {
         return .{ .command_queue = command_queue };
+    }
+
+    pub fn deinit(self: *const Self) void {
+        release(self.command_queue);
     }
 };
 
@@ -202,9 +220,12 @@ pub fn main() !void {
     const ns_window = try NsWindow.init(window);
     const ns_view = try ns_window.contentView();
     const metal_layer = try CAMetalLayer.init();
+
     const mtl_device = try MTLDevice.init();
+    defer mtl_device.deinit();
+
     const mtl_cmd_q = try mtl_device.newCommandQueue();
-    _ = mtl_cmd_q;
+    defer mtl_cmd_q.deinit();
 
     ns_view.setWantsLayer(true);
     ns_view.setLayer(metal_layer);
