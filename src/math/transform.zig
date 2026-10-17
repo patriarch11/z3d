@@ -1,8 +1,8 @@
 const Vec3f = @import("_vec.zig").Vec3f;
 const Vec4f = @import("_vec.zig").Vec4f;
-const Mat4f = @import("mat.zig").Mat4f;
+const Mat4f = @import("_mat.zig").Mat4f;
 const Quatf = @import("quat.zig").Quatf;
-const mat = @import("mat.zig");
+const mat = @import("_mat.zig");
 
 pub fn makeTransform(
     translation: Vec3f,

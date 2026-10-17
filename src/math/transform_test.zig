@@ -1,7 +1,7 @@
 const std = @import("std");
 const trs = @import("transform.zig");
 const Vec3f = @import("_vec.zig").Vec3f;
-const Mat4f = @import("mat.zig").Mat4f;
+const Mat4f = @import("_mat.zig").Mat4f;
 const Quatf = @import("quat.zig").Quatf;
 
 const tolerance: f32 = 1e-5;

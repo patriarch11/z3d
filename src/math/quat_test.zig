@@ -1,7 +1,7 @@
 const std = @import("std");
 const Quaternion = @import("quat.zig").Quaternion;
 const Vec = @import("_vec.zig").Vec;
-const Mat = @import("mat.zig").Mat;
+const Mat = @import("_mat.zig").Mat;
 
 const Quatf = Quaternion(f32);
 const Vec3f = Vec(3, f32);
