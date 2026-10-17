@@ -112,6 +112,7 @@ pub const NsView = struct {
 
 pub const CAMetalLayer = struct {
     metal_layer: ObjcId,
+    set_device_sel: ObjcSel,
 
     const Self = @This();
 
@@ -129,7 +130,32 @@ pub const CAMetalLayer = struct {
 
         std.debug.print("CAMetalLayer: {*}\n", .{metal_layer});
 
-        return .{ .metal_layer = metal_layer };
+        const set_device_sel = sel_registerName("setDevice:") orelse
+            return error.SetDeviceSelectorUnavailable;
+
+        return .{
+            .metal_layer = metal_layer,
+            .set_device_sel = set_device_sel,
+        };
+    }
+
+    pub fn setDevice(self: *const Self, device: MTLDevice) void {
+        send_object(self.metal_layer, self.set_device_sel, device.device);
+    }
+};
+
+pub const MTLDevice = struct {
+    device: ObjcId,
+
+    const Self = @This();
+
+    pub fn init() !Self {
+        const device = MTLCreateSystemDefaultDevice() orelse
+            return error.MetalDeviceUnavailable;
+
+        std.debug.print("MTLDevice: {*}\n", .{device});
+
+        return .{ .device = device };
     }
 };
 
@@ -151,14 +177,11 @@ pub fn main() !void {
     const ns_window = try NsWindow.init(window);
     const ns_view = try ns_window.contentView();
     const metal_layer = try CAMetalLayer.init();
+    const mtl_device = try MTLDevice.init();
 
     ns_view.setWantsLayer(true);
     ns_view.setLayer(metal_layer);
-
-    const device = MTLCreateSystemDefaultDevice() orelse
-        return error.MetalDeviceUnavailable;
-
-    std.debug.print("MTLDevice: {*}\n", .{device});
+    metal_layer.setDevice(mtl_device);
 
     while (!window.shouldClose()) {
         glfw.pollEvents();
