@@ -12,6 +12,9 @@ extern "objc" fn objc_getClass(
     name: [*:0]const u8,
 ) ?ObjcId;
 
+extern "objc" fn objc_autoreleasePoolPush() *anyopaque;
+extern "objc" fn objc_autoreleasePoolPop(pool: *anyopaque) void;
+
 extern "objc" fn objc_msgSend() callconv(.c) void;
 
 extern "Metal" fn MTLCreateSystemDefaultDevice() ?ObjcId;
@@ -540,56 +543,54 @@ pub fn main() !void {
     const mtl_device = try MTLDevice.init();
     defer mtl_device.deinit();
 
-    const mtl_cmd_q = try mtl_device.newCommandQueue();
-    defer mtl_cmd_q.deinit();
-
-    const cmd_buffer = try mtl_cmd_q.commandBuffer();
-
-    std.debug.print("MTLCommandBuffer: {*}\n", .{cmd_buffer.buffer});
-
     ns_view.setWantsLayer(true);
     ns_view.setLayer(metal_layer);
     metal_layer.setDevice(mtl_device);
 
-    const drawable = (try metal_layer.nextDrawable()) orelse
-        return ObjcErr.DrawableUnavailable;
+    var n: f64 = 0.0;
 
-    std.debug.print("CAMetalDrawable: {*}\n", .{drawable.drawable});
-
-    const texture = try drawable.texture();
-
-    std.debug.print("MTLTexture: {*}\n", .{texture.texture});
-
-    const mtl_render_pass_descriptor = try MTLRenderPassDescriptor.init();
-
-    const attachments_arr = try mtl_render_pass_descriptor.colorAttachments();
-
-    const attachment = try attachments_arr.sub(0);
-
-    attachment.setTexture(texture);
-    attachment.setLoadAction(.clear);
-    attachment.setStoreAction(.store);
-
-    attachment.setClearColor(.{
-        .red = 0.1,
-        .green = 0.2,
-        .blue = 0.8,
-        .alpha = 1.0,
-    });
-
-    const encoder = try cmd_buffer.renderCommandEncoder(
-        mtl_render_pass_descriptor,
-    );
-
-    std.debug.print("MTLRenderCommandEncoder: {*}\n", .{
-        encoder.encoder,
-    });
-
-    encoder.endEncoding();
-    cmd_buffer.presentDrawable(drawable);
-    cmd_buffer.commit();
-
-    while (!window.shouldClose()) {
+    while (!window.shouldClose()) : (n += 0.001) {
         glfw.pollEvents();
+
+        const pool = objc_autoreleasePoolPush();
+        defer objc_autoreleasePoolPop(pool);
+
+        const mtl_cmd_q = try mtl_device.newCommandQueue();
+        defer mtl_cmd_q.deinit();
+
+        const cmd_buffer = try mtl_cmd_q.commandBuffer();
+        std.debug.print("MTLCommandBuffer: {*}\n", .{cmd_buffer.buffer});
+
+        const drawable = (try metal_layer.nextDrawable()) orelse
+            return ObjcErr.DrawableUnavailable;
+        std.debug.print("CAMetalDrawable: {*}\n", .{drawable.drawable});
+
+        const texture = try drawable.texture();
+        std.debug.print("MTLTexture: {*}\n", .{texture.texture});
+
+        const mtl_render_pass_descriptor = try MTLRenderPassDescriptor.init();
+        const attachments_arr = try mtl_render_pass_descriptor.colorAttachments();
+        const attachment = try attachments_arr.sub(0);
+
+        attachment.setTexture(texture);
+        attachment.setLoadAction(.clear);
+        attachment.setStoreAction(.store);
+        attachment.setClearColor(.{
+            .red = 0.1,
+            .green = n,
+            .blue = 0.8,
+            .alpha = 1.0,
+        });
+
+        const encoder = try cmd_buffer.renderCommandEncoder(
+            mtl_render_pass_descriptor,
+        );
+        std.debug.print("MTLRenderCommandEncoder: {*}\n", .{
+            encoder.encoder,
+        });
+
+        encoder.endEncoding();
+        cmd_buffer.presentDrawable(drawable);
+        cmd_buffer.commit();
     }
 }
