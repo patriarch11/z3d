@@ -38,10 +38,17 @@ const SendVoidFn = *const fn (
     ObjcSel,
 ) callconv(.c) void;
 
+const SendIndexFn = *const fn (
+    ObjcId,
+    ObjcSel,
+    usize,
+) callconv(.c) ?ObjcId;
+
 const send: SendFn = @ptrCast(&objc_msgSend);
 const send_bool: SendBoolFn = @ptrCast(&objc_msgSend);
 const send_object: SendObjectFn = @ptrCast(&objc_msgSend);
 const send_void: SendVoidFn = @ptrCast(&objc_msgSend);
+const send_index: SendIndexFn = @ptrCast(&objc_msgSend);
 
 const ObjcErr = error{
     CocoaWindowUnavailable,
@@ -63,6 +70,10 @@ const ObjcErr = error{
     RenderPassClassUnavailable,
     RenderPassSelectorUnavailable,
     RenderPassCreationFailed,
+    ColorAttachmentsSelectorUnavailable,
+    ColorAttachmentsUnavailable,
+    AttachmentIndexSelectorUnavailable,
+    ColorAttachmentUnavailable,
 };
 
 fn release(object: ObjcId) void {
@@ -256,7 +267,8 @@ pub const MTLTexture = struct {
 };
 
 pub const MTLRenderPassDescriptor = struct {
-    descriptor: ObjcSel,
+    descriptor: ObjcId,
+    color_attachements_sel: ObjcSel,
 
     const Self = @This();
 
@@ -272,7 +284,58 @@ pub const MTLRenderPassDescriptor = struct {
 
         std.debug.print("MTLRenderPassDescriptor: {*}\n", .{descriptor});
 
-        return .{ .descriptor = descriptor };
+        const color_attachements_sel = sel_registerName("colorAttachments") orelse
+            return ObjcErr.ColorAttachmentsSelectorUnavailable;
+
+        return .{
+            .descriptor = descriptor,
+            .color_attachements_sel = color_attachements_sel,
+        };
+    }
+
+    pub fn colorAttachments(self: *const Self) !MTLRenderPassColorAttachmentDescriptorArray {
+        const attachements = send(self.descriptor, self.color_attachements_sel) orelse
+            return ObjcErr.ColorAttachmentsUnavailable;
+
+        return MTLRenderPassColorAttachmentDescriptorArray.init(attachements);
+    }
+};
+
+pub const MTLRenderPassColorAttachmentDescriptorArray = struct {
+    attachments: ObjcId,
+    index_sel: ObjcSel,
+
+    const Self = @This();
+
+    pub fn init(attachments: ObjcId) !Self {
+        const index_sel = sel_registerName("objectAtIndexedSubscript:") orelse
+            return ObjcErr.AttachmentIndexSelectorUnavailable;
+        return .{
+            .attachments = attachments,
+            .index_sel = index_sel,
+        };
+    }
+
+    pub fn sub(self: *const Self, idx: usize) !MTLRenderPassColorAttachmentDescriptor {
+        const attachment = send_index(
+            self.attachments,
+            self.index_sel,
+            idx,
+        ) orelse return ObjcErr.ColorAttachmentUnavailable;
+
+        std.debug.print("ColorAttachment[0]: {*}\n", .{attachment});
+
+        return MTLRenderPassColorAttachmentDescriptor.init(attachment);
+    }
+};
+
+pub const MTLRenderPassColorAttachmentDescriptor = struct {
+    attachment: ObjcId,
+
+    const Self = @This();
+
+    pub fn init(attachment: ObjcId) Self {
+        return .{ .attachment = attachment };
     }
 };
 
@@ -315,7 +378,11 @@ pub fn main() !void {
     std.debug.print("MTLTexture: {*}\n", .{texture.texture});
 
     const mtl_render_pass_descriptor = try MTLRenderPassDescriptor.init();
-    _ = mtl_render_pass_descriptor;
+
+    const attachements_arr = try mtl_render_pass_descriptor.colorAttachments();
+
+    const attachement = try attachements_arr.sub(0);
+    _ = attachement;
 
     while (!window.shouldClose()) {
         glfw.pollEvents();
