@@ -1,131 +1,133 @@
-const Vec = @import("_vec.zig").Vec;
-const Mat = @import("_mat.zig").Mat;
+const std = @import("std");
+const vec = @import("vec.zig");
 
-pub const Quatf = Quaternion(f32);
+pub const Quat = vec.F32x4;
 
-pub fn Quaternion(comptime T: type) type {
-    comptime {
-        switch (@typeInfo(T)) {
-            .float => {},
-            else => @compileError("T must be a floating-point type"),
-        }
-    }
+pub const identity: Quat = vec.f32x4(0, 0, 0, 1);
 
-    return struct {
-        const Self = @This();
-        const Vec3 = Vec(3, T);
-        const Mat3 = Mat(3, 3, T);
-        const Mat4 = Mat(4, 4, T);
+pub fn fromAxisAngle(axis: vec.Vec, angle: f32) Quat {
+    const half = angle * 0.5;
 
-        pub const Error = error{ZeroLengthQuaternion};
+    const sin = @sin(half);
+    const cos = @cos(half);
 
-        x: T,
-        y: T,
-        z: T,
-        w: T,
+    const a = vec.normalize3(axis);
 
-        pub fn init(x: T, y: T, z: T, w: T) Self {
-            return .{ .x = x, .y = y, .z = z, .w = w };
-        }
+    var res = a * vec.splat(sin);
+    res[3] = cos;
 
-        pub fn initIdentity() Self {
-            return init(0, 0, 0, 1);
-        }
+    return res;
+}
+test "z3dmath.quat.fromAxisAngle" {
+    const toRad = std.math.degreesToRadians;
 
-        pub fn lengthSquared(self: *const Self) T {
-            return self.x * self.x + self.y * self.y +
-                self.z * self.z + self.w * self.w;
-        }
+    const cases = .{
+        // Identity rotation
+        .{ vec.f32x4(1, 0, 0, 0), toRad(0.0), vec.f32x4(0, 0, 0, 1) },
 
-        pub fn length(self: *const Self) T {
-            return @sqrt(self.lengthSquared());
-        }
+        // 90 degrees around X
+        .{ vec.f32x4(1, 0, 0, 0), toRad(90.0), vec.f32x4(0.7071068, 0, 0, 0.7071068) },
 
-        pub fn normalize(self: *const Self) Error!Self {
-            const len = self.length();
-            if (len == 0) return error.ZeroLengthQuaternion;
+        // 90 degrees around Y
+        .{ vec.f32x4(0, 1, 0, 0), toRad(90.0), vec.f32x4(0, 0.7071068, 0, 0.7071068) },
 
-            return init(
-                self.x / len,
-                self.y / len,
-                self.z / len,
-                self.w / len,
-            );
-        }
+        // 90 degrees around Z
+        .{ vec.f32x4(0, 0, 1, 0), toRad(90.0), vec.f32x4(0, 0, 0.7071068, 0.7071068) },
 
-        pub fn conjugate(self: *const Self) Self {
-            return init(-self.x, -self.y, -self.z, self.w);
-        }
+        // 180 degrees around X
+        .{ vec.f32x4(1, 0, 0, 0), toRad(180.0), vec.f32x4(1, 0, 0, 0) },
 
-        pub fn invert(self: *const Self) Error!Self {
-            const len_sq = self.lengthSquared();
-            if (len_sq == 0) return error.ZeroLengthQuaternion;
+        // Negative rotation
+        .{ vec.f32x4(0, 1, 0, 0), toRad(-90.0), vec.f32x4(0, -0.7071068, 0, 0.7071068) },
 
-            return init(
-                -self.x / len_sq,
-                -self.y / len_sq,
-                -self.z / len_sq,
-                self.w / len_sq,
-            );
-        }
+        // Non-unit axis
+        .{ vec.f32x4(0, 5, 0, 0), toRad(90.0), vec.f32x4(0, 0.7071068, 0, 0.7071068) },
 
-        pub fn mul(a: Self, b: Self) Self {
-            return init(
-                a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
-                a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
-                a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
-                a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z,
-            );
-        }
-
-        /// `angle` is in radians; `axis` must be a unit vector.
-        pub fn fromAxisAngle(axis: Vec3, angle: T) Self {
-            const half = angle / 2;
-            const s = @sin(half);
-
-            return init(
-                axis.data[0] * s,
-                axis.data[1] * s,
-                axis.data[2] * s,
-                @cos(half),
-            );
-        }
-
-        /// Rotates a vector by a unit quaternion.
-        pub fn rotateVec3(q: Self, v: Vec3) Vec3 {
-            const u = Vec3.init(.{ q.x, q.y, q.z });
-            const cross_uv = Vec3.cross(u, v);
-            const term1 = Vec3.scale(cross_uv, 2 * q.w);
-            const term2 = Vec3.scale(Vec3.cross(u, cross_uv), 2);
-            return Vec3.add(v, Vec3.add(term1, term2));
-        }
-
-        /// Converts a unit quaternion to a 3x3 rotation matrix.
-        pub fn toMat3(self: *const Self) Mat3 {
-            const x = self.x;
-            const y = self.y;
-            const z = self.z;
-            const w = self.w;
-
-            return Mat3.init(.{
-                .{ 1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y) },
-                .{ 2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x) },
-                .{ 2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y) },
-            });
-        }
-
-        /// Converts a unit quaternion to a 4x4 rotation matrix.
-        pub fn toMat4(self: *const Self) Mat4 {
-            const mat3 = self.toMat3();
-            var result = Mat4.initIdentity();
-
-            for (0..3) |row| {
-                for (0..3) |col| {
-                    result.data[row][col] = mat3.data[row][col];
-                }
-            }
-
-            return result;
-        }
+        // Arbitrary axis
+        .{ vec.f32x4(1, 1, 0, 0), toRad(180.0), vec.f32x4(0.7071068, 0.7071068, 0, 0) },
     };
+
+    inline for (cases) |case| {
+        const result = fromAxisAngle(case[0], case[1]);
+
+        try vec.test_util.expectVecApproxEqAbs(case[2], result);
+    }
+}
+
+pub fn mul(a: Quat, b: Quat) Quat {
+    const u = vec.applyMask(a, vec.mask_xyz);
+    const v = vec.applyMask(b, vec.mask_xyz);
+
+    // zig fmt: off
+    const xyz = vec.splat(a[3]) * v
+        + vec.splat(b[3]) * u
+        + vec.cross3(u, v);
+    // zig fmt: on
+
+    const w = a[3] * b[3] - vec.dot3(u, v)[0];
+
+    return vec.f32x4(xyz[0], xyz[1], xyz[2], w);
+}
+test "z3dmath.quat.mul" {
+    const h = 0.7071068;
+
+    const qx = vec.f32x4(h, 0, 0, h);
+    const qy = vec.f32x4(0, h, 0, h);
+    const qz = vec.f32x4(0, 0, h, h);
+
+    const cases = .{
+        // Identity * identity
+        .{ identity, identity, identity },
+
+        // Right identity
+        .{ qx, identity, qx },
+
+        // Left identity
+        .{ identity, qy, qy },
+
+        // 90 degrees + 90 degrees around X
+        .{ qx, qx, vec.f32x4(1, 0, 0, 0) },
+
+        // 90 degrees + 90 degrees around Y
+        .{ qy, qy, vec.f32x4(0, 1, 0, 0) },
+
+        // X * Y
+        .{ qx, qy, vec.f32x4(0.5, 0.5, 0.5, 0.5) },
+
+        // Y * X
+        .{ qy, qx, vec.f32x4(0.5, 0.5, -0.5, 0.5) },
+
+        // X * Z
+        .{ qx, qz, vec.f32x4(0.5, -0.5, 0.5, 0.5) },
+
+        // Z * X
+        .{ qz, qx, vec.f32x4(0.5, 0.5, 0.5, 0.5) },
+
+        // Quaternion multiplied by its conjugate
+        .{
+            qx,
+            vec.f32x4(-h, 0, 0, h),
+            identity,
+        },
+
+        // Non-unit quaternions
+        .{
+            vec.f32x4(1, 2, 3, 4),
+            vec.f32x4(5, 6, 7, 8),
+            vec.f32x4(24, 48, 48, -6),
+        },
+    };
+
+    inline for (cases) |case| {
+        const result = mul(case[0], case[1]);
+
+        try vec.test_util.expectVecApproxEqAbs(
+            case[2],
+            result,
+        );
+    }
+}
+
+pub fn normalize(q: Quat) Quat {
+    return vec.normalize4(q);
 }
