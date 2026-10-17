@@ -137,6 +137,7 @@ const ObjcErr = error{
     NewLibrarySelectorUnavailable,
     LibraryCreationFailed,
     NSStringClassUnavailable,
+    NewFunctionSelectorUnavailable,
 };
 
 pub const MTLLoadAction = enum(usize) {
@@ -565,6 +566,7 @@ pub const MTLRenderPassColorAttachmentDescriptor = struct {
 
 pub const MTLLibrary = struct {
     library: ObjcId,
+    new_function_with_name_sel: ObjcSel,
 
     const Self = @This();
 
@@ -586,11 +588,46 @@ pub const MTLLibrary = struct {
             &ns_error,
         ) orelse return ObjcErr.LibraryCreationFailed;
 
-        return .{ .library = library };
+        const new_function_with_name_sel = sel_registerName("newFunctionWithName:") orelse
+            return ObjcErr.NewFunctionSelectorUnavailable;
+
+        return .{
+            .library = library,
+            .new_function_with_name_sel = new_function_with_name_sel,
+        };
     }
 
     pub fn deinit(self: *const Self) void {
         release(self.library);
+    }
+
+    pub fn newFunctionWithName(
+        self: *const Self,
+        name: [*:0]const u8,
+    ) !MTLFunction {
+        const ns_name = try nsString(name);
+
+        const function = send_object_return(
+            self.library,
+            self.new_function_with_name_sel,
+            ns_name,
+        ) orelse return error.FunctionCreationFailed;
+
+        return MTLFunction.init(function);
+    }
+};
+
+pub const MTLFunction = struct {
+    function: ObjcId,
+
+    const Self = @This();
+
+    pub fn init(function: ObjcId) Self {
+        return .{ .function = function };
+    }
+
+    pub fn deinit(self: *const Self) void {
+        release(self.function);
     }
 };
 
@@ -626,6 +663,15 @@ pub fn main() !void {
     defer mtl_library.deinit();
 
     std.debug.print("MTLLibrary: {*}\n", .{mtl_library.library});
+
+    const vertex_fn = try mtl_library.newFunctionWithName("vertex_main");
+    defer vertex_fn.deinit();
+
+    const fragment_fn = try mtl_library.newFunctionWithName("fragment_main");
+    defer fragment_fn.deinit();
+
+    std.debug.print("Vertex function: {*}\n", .{vertex_fn.function});
+    std.debug.print("Fragment function: {*}\n", .{fragment_fn.function});
 
     const mtl_cmd_q = try mtl_device.newCommandQueue();
     defer mtl_cmd_q.deinit();
