@@ -3,6 +3,7 @@ const glfw = @import("zglfw");
 
 const ObjcId = *anyopaque;
 const ObjcSel = *anyopaque;
+const NsError = ObjcId;
 
 extern "objc" fn sel_registerName(
     name: [*:0]const u8,
@@ -81,7 +82,7 @@ const SendObjectErrorFn = *const fn (
     ObjcId,
     ObjcSel,
     ObjcId,
-    ?*?ObjcId,
+    ?*?NsError,
 ) callconv(.c) ?ObjcId;
 
 const send: SendFn = @ptrCast(&objc_msgSend);
@@ -148,6 +149,8 @@ const ObjcErr = error{
     SetFragmentFunctionSelectorUnavailable,
     PipelineColorAttachmentUnavailable,
     SetPixelFormatSelectorUnavailable,
+    NewRenderPipelineStateSelectorUnavailable,
+    RenderPipelineStateCreationFailed,
 };
 
 pub const MTLLoadAction = enum(usize) {
@@ -332,6 +335,7 @@ pub const CAMetalDrawable = struct {
 pub const MTLDevice = struct {
     device: ObjcId,
     new_queue_sel: ObjcSel,
+    new_render_pipeline_state_sel: ObjcSel,
 
     const Self = @This();
 
@@ -341,8 +345,15 @@ pub const MTLDevice = struct {
 
         const new_queue_sel = sel_registerName("newCommandQueue") orelse
             return ObjcErr.CommandQueueSelectorUnavailable;
+        const new_render_pipeline_state_sel = sel_registerName(
+            "newRenderPipelineStateWithDescriptor:error:",
+        ) orelse return ObjcErr.NewRenderPipelineStateSelectorUnavailable;
 
-        return .{ .device = device, .new_queue_sel = new_queue_sel };
+        return .{
+            .device = device,
+            .new_queue_sel = new_queue_sel,
+            .new_render_pipeline_state_sel = new_render_pipeline_state_sel,
+        };
     }
 
     pub fn deinit(self: *const Self) void {
@@ -354,6 +365,29 @@ pub const MTLDevice = struct {
             return ObjcErr.CommandQueueCreationFailed;
 
         return try MTLCommandQueue.init(command_queue);
+    }
+
+    pub fn newRenderPipelineState(
+        self: *const Self,
+        descriptor: MTLRenderPipelineDescriptor,
+    ) !MTLRenderPipelineState {
+        var ns_error: ?ObjcId = null;
+
+        const pipeline = send_object_error(
+            self.device,
+            self.new_render_pipeline_state_sel,
+            descriptor.descriptor,
+            &ns_error,
+        ) orelse {
+            if (ns_error) |err| {
+                // TODO: Extract NSError.localizedDescription
+                std.debug.print("Metal pipeline error: {*}\n", .{err});
+            }
+
+            return ObjcErr.RenderPipelineStateCreationFailed;
+        };
+
+        return MTLRenderPipelineState.init(pipeline);
     }
 };
 
@@ -693,6 +727,20 @@ pub const MTLRenderPipelineDescriptor = struct {
     }
 };
 
+pub const MTLRenderPipelineState = struct {
+    pipeline: ObjcId,
+
+    const Self = @This();
+
+    pub fn init(pipeline: ObjcId) Self {
+        return .{ .pipeline = pipeline };
+    }
+
+    pub fn deinit(self: *const Self) void {
+        release(self.pipeline);
+    }
+};
+
 pub const MTLLibrary = struct {
     library: ObjcId,
     new_function_with_name_sel: ObjcSel,
@@ -708,14 +756,21 @@ pub const MTLLibrary = struct {
 
         const ns_path = try nsString(path);
 
-        var ns_error: ?ObjcId = null;
+        var ns_error: ?NsError = null;
 
         const library = send_object_error(
             device.device,
             selector,
             ns_path,
             &ns_error,
-        ) orelse return ObjcErr.LibraryCreationFailed;
+        ) orelse {
+            if (ns_error) |err| {
+                // TODO: Extract NSError.localizedDescription
+                std.debug.print("Metal library creation error: {*}\n", .{err});
+            }
+
+            return ObjcErr.LibraryCreationFailed;
+        };
 
         const new_function_with_name_sel = sel_registerName("newFunctionWithName:") orelse
             return ObjcErr.NewFunctionSelectorUnavailable;
@@ -810,6 +865,10 @@ pub fn main() !void {
 
     pipeline_attachment.setPixelFormat(.bgra8_unorm);
 
+    const pipeline = try mtl_device.newRenderPipelineState(pipeline_desc);
+    defer pipeline.deinit();
+
+    std.debug.print("MTLRenderPipelineState: {*}\n", .{pipeline.pipeline});
     std.debug.print("Vertex function: {*}\n", .{vertex_fn.function});
     std.debug.print("Fragment function: {*}\n", .{fragment_fn.function});
 
