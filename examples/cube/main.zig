@@ -47,6 +47,8 @@ const ObjcErr = error{
     WantsLayerSelectorUnavailable,
     SetLayerSelectorUnavailable,
     MTLDeviceUnavailable,
+    CommandQueueSelectorUnavailable,
+    CommandQueueCreationFailed,
 };
 
 pub const NsWindow = struct {
@@ -146,16 +148,39 @@ pub const CAMetalLayer = struct {
 
 pub const MTLDevice = struct {
     device: ObjcId,
+    new_queue_sel: ObjcSel,
 
     const Self = @This();
 
     pub fn init() !Self {
         const device = MTLCreateSystemDefaultDevice() orelse
-            return error.MetalDeviceUnavailable;
+            return ObjcErr.MTLDeviceUnavailable;
 
         std.debug.print("MTLDevice: {*}\n", .{device});
 
-        return .{ .device = device };
+        const new_queue_sel = sel_registerName("newCommandQueue") orelse
+            return ObjcErr.CommandQueueSelectorUnavailable;
+
+        return .{ .device = device, .new_queue_sel = new_queue_sel };
+    }
+
+    pub fn newCommandQueue(self: *const Self) !MTLCommandQueue {
+        const command_queue = send(self.device, self.new_queue_sel) orelse
+            return ObjcErr.CommandQueueCreationFailed;
+
+        std.debug.print("MTLCommandQueue: {*}\n", .{command_queue});
+
+        return MTLCommandQueue.init(command_queue);
+    }
+};
+
+pub const MTLCommandQueue = struct {
+    command_queue: ObjcId,
+
+    const Self = @This();
+
+    pub fn init(command_queue: ObjcId) Self {
+        return .{ .command_queue = command_queue };
     }
 };
 
@@ -178,6 +203,8 @@ pub fn main() !void {
     const ns_view = try ns_window.contentView();
     const metal_layer = try CAMetalLayer.init();
     const mtl_device = try MTLDevice.init();
+    const mtl_cmd_q = try mtl_device.newCommandQueue();
+    _ = mtl_cmd_q;
 
     ns_view.setWantsLayer(true);
     ns_view.setLayer(metal_layer);
