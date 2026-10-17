@@ -10,6 +10,8 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    z3d.addImport("z3d", z3d);
+
     const zglfw = b.dependency("zglfw", .{
         .target = target,
         .optimize = optimize,
