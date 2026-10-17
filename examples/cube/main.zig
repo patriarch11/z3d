@@ -6,6 +6,26 @@ const objc = z3d.platform.macos.objc;
 const cocoa = z3d.platform.macos.cocoa;
 const metal = z3d.renderer.metal;
 
+const Vertex = extern struct {
+    position: [2]f32,
+    color: [4]f32,
+};
+
+const vertices = [_]Vertex{
+    .{
+        .position = .{ 0.0, 0.5 },
+        .color = .{ 1.0, 0.0, 0.0, 1.0 },
+    },
+    .{
+        .position = .{ -0.5, -0.5 },
+        .color = .{ 0.0, 1.0, 0.0, 1.0 },
+    },
+    .{
+        .position = .{ 0.5, -0.5 },
+        .color = .{ 0.0, 0.0, 1.0, 1.0 },
+    },
+};
+
 pub fn main() !void {
     try glfw.init();
     defer glfw.terminate();
@@ -33,6 +53,11 @@ pub fn main() !void {
 
     const mtl_device = try metal.MTLDevice.init();
     defer mtl_device.deinit();
+
+    const vertex_buffer = try mtl_device.newBuffer(
+        std.mem.sliceAsBytes(vertices[0..]),
+    );
+    defer vertex_buffer.deinit();
 
     const mtl_library = try metal.MTLLibrary.init(
         mtl_device,
@@ -130,7 +155,8 @@ pub fn main() !void {
         );
 
         encoder.setRenderPipelineState(pipeline);
-        encoder.drawPrimitives(.triangle, 0, 3);
+        encoder.setVertexBuffer(vertex_buffer, 0, 0);
+        encoder.drawPrimitives(.triangle, 0, vertices.len);
 
         encoder.endEncoding();
         cmd_buffer.presentDrawable(drawable);
