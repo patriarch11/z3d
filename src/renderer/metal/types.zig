@@ -6,11 +6,13 @@ pub const SendClearColorFn = *const fn (
     objc.Sel,
     MTLClearColor,
 ) callconv(.c) void;
+
 pub const SendSizeFn = *const fn (
     objc.Id,
     objc.Sel,
     cocoa.CGSize,
 ) callconv(.c) void;
+
 pub const SendDrawPrimitivesFn = *const fn (
     objc.Id,
     objc.Sel,
@@ -18,6 +20,14 @@ pub const SendDrawPrimitivesFn = *const fn (
     usize,
     usize,
 ) callconv(.c) void;
+
+pub const SendNewBufferFn = *const fn (
+    objc.Id,
+    objc.Sel,
+    [*]const u8,
+    usize,
+    usize,
+) callconv(.c) ?objc.Id;
 
 pub const MTLLoadAction = enum(usize) {
     dont_care = 0,

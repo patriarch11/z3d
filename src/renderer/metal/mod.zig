@@ -7,6 +7,7 @@ extern "Metal" fn MTLCreateSystemDefaultDevice() ?objc.Id;
 const send_clear_color: types.SendClearColorFn = @ptrCast(&objc.objc_msgSend);
 const send_size: types.SendSizeFn = @ptrCast(&objc.objc_msgSend);
 const send_draw_primitives: types.SendDrawPrimitivesFn = @ptrCast(&objc.objc_msgSend);
+const send_new_buffer: types.SendNewBufferFn = @ptrCast(&objc.objc_msgSend);
 
 pub const Error = error{
     CAMetalLayerCreationFailed,
@@ -23,6 +24,7 @@ pub const Error = error{
     RenderPipelineDescriptorCreationFailed,
     PipelineColorAttachmentsUnavailable,
     LibraryCreationFailed,
+    MTLBufferCreationFailed,
 };
 
 pub const CAMetalLayer = struct {
@@ -107,6 +109,7 @@ pub const MTLDevice = struct {
     device: objc.Id,
     new_queue_sel: objc.Sel,
     new_render_pipeline_state_sel: objc.Sel,
+    new_buffer_with_bytes_sel: objc.Sel,
 
     const Self = @This();
 
@@ -119,11 +122,15 @@ pub const MTLDevice = struct {
         const new_render_pipeline_state_sel = objc.sel_registerName(
             "newRenderPipelineStateWithDescriptor:error:",
         ) orelse return objc.Error.SelectorUnavailable;
+        const new_buffer_with_bytes_sel = objc.sel_registerName(
+            "newBufferWithBytes:length:options:",
+        ) orelse return objc.Error.SelectorUnavailable;
 
         return .{
             .device = device,
             .new_queue_sel = new_queue_sel,
             .new_render_pipeline_state_sel = new_render_pipeline_state_sel,
+            .new_buffer_with_bytes_sel = new_buffer_with_bytes_sel,
         };
     }
 
@@ -159,6 +166,35 @@ pub const MTLDevice = struct {
         };
 
         return MTLRenderPipelineState.init(pipeline);
+    }
+
+    pub fn newBuffer(
+        self: *const Self,
+        data: []const u8,
+    ) !MTLBuffer {
+        const buffer = send_new_buffer(
+            self.device,
+            self.new_buffer_with_bytes_sel,
+            data.ptr,
+            data.len,
+            0,
+        ) orelse return Error.MTLBufferCreationFailed;
+
+        return MTLBuffer.init(buffer);
+    }
+};
+
+pub const MTLBuffer = struct {
+    buffer: objc.Id,
+
+    const Self = @This();
+
+    pub fn init(buffer: objc.Id) Self {
+        return .{ .buffer = buffer };
+    }
+
+    pub fn deinit(self: *const Self) void {
+        objc.release(self.buffer);
     }
 };
 
