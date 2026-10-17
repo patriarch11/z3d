@@ -57,6 +57,9 @@ const ObjcErr = error{
     CommandQueueCreationFailed,
     SetDeviceSelectorUnavailable,
     NextDrawableSelectorUnavailable,
+    TextureSelectorUnavailable,
+    TextureUnavailable,
+    DrawableUnavailable,
 };
 
 fn release(object: ObjcId) void {
@@ -162,23 +165,34 @@ pub const CAMetalLayer = struct {
         send_object(self.metal_layer, self.set_device_sel, device.device);
     }
 
-    pub fn nextDrawable(self: *const Self) ?CAMetalDrawable {
+    pub fn nextDrawable(self: *const Self) !?CAMetalDrawable {
         const drawable = send(
             self.metal_layer,
             self.next_drawable_sel,
         ) orelse return null;
 
-        return CAMetalDrawable.init(drawable);
+        return try CAMetalDrawable.init(drawable);
     }
 };
 
 pub const CAMetalDrawable = struct {
     drawable: ObjcId,
+    texture_sel: ObjcSel,
 
     const Self = @This();
 
-    pub fn init(drawable: ObjcId) Self {
-        return .{ .drawable = drawable };
+    pub fn init(drawable: ObjcId) !Self {
+        const texture_sel = sel_registerName("texture") orelse
+            return ObjcErr.TextureSelectorUnavailable;
+
+        return .{ .drawable = drawable, .texture_sel = texture_sel };
+    }
+
+    pub fn texture(self: *const Self) !MTLTexture {
+        const t = send(self.drawable, self.texture_sel) orelse
+            return ObjcErr.TextureUnavailable;
+
+        return MTLTexture.init(t);
     }
 };
 
@@ -219,12 +233,22 @@ pub const MTLCommandQueue = struct {
 
     const Self = @This();
 
-    pub fn init(command_queue: ObjcId) !Self {
+    pub fn init(command_queue: ObjcId) Self {
         return .{ .command_queue = command_queue };
     }
 
     pub fn deinit(self: *const Self) void {
         release(self.command_queue);
+    }
+};
+
+pub const MTLTexture = struct {
+    texture: ObjcId,
+
+    const Self = @This();
+
+    pub fn init(texture: ObjcId) Self {
+        return .{ .texture = texture };
     }
 };
 
@@ -257,10 +281,14 @@ pub fn main() !void {
     ns_view.setLayer(metal_layer);
     metal_layer.setDevice(mtl_device);
 
-    const drawable = metal_layer.nextDrawable() orelse
-        return error.DrawableUnavailable;
+    const drawable = (try metal_layer.nextDrawable()) orelse
+        return ObjcErr.DrawableUnavailable;
 
     std.debug.print("CAMetalDrawable: {*}\n", .{drawable.drawable});
+
+    const texture = try drawable.texture();
+
+    std.debug.print("MTLTexture: {*}\n", .{texture.texture});
 
     while (!window.shouldClose()) {
         glfw.pollEvents();
