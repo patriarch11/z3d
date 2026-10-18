@@ -76,6 +76,7 @@ pub const MTLClearColor = extern struct {
 pub const MTLPixelFormat = enum(usize) {
     invalid = 0,
     bgra8_unorm = 80,
+    depth32_float = 252,
 };
 
 pub const MTLPrimitiveType = enum(usize) {

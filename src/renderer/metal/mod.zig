@@ -28,6 +28,7 @@ pub const Error = error{
     PipelineColorAttachmentsUnavailable,
     LibraryCreationFailed,
     MTLBufferCreationFailed,
+    DepthAttachmentUnavailable,
 };
 
 pub const CAMetalLayer = struct {
@@ -113,6 +114,8 @@ pub const MTLDevice = struct {
     new_queue_sel: objc.Sel,
     new_render_pipeline_state_sel: objc.Sel,
     new_buffer_with_bytes_sel: objc.Sel,
+    new_texture_with_descriptor_sel: objc.Sel,
+    new_depth_stencil_state_sel: objc.Sel,
 
     const Self = @This();
 
@@ -128,12 +131,20 @@ pub const MTLDevice = struct {
         const new_buffer_with_bytes_sel = objc.sel_registerName(
             "newBufferWithBytes:length:options:",
         ) orelse return objc.Error.SelectorUnavailable;
+        const new_texture_with_descriptor_sel = objc.sel_registerName(
+            "newTextureWithDescriptor:",
+        ) orelse return objc.Error.SelectorUnavailable;
+        const new_depth_stencil_state_sel = objc.sel_registerName(
+            "newDepthStencilStateWithDescriptor:",
+        ) orelse return objc.Error.SelectorUnavailable;
 
         return .{
             .device = device,
             .new_queue_sel = new_queue_sel,
             .new_render_pipeline_state_sel = new_render_pipeline_state_sel,
             .new_buffer_with_bytes_sel = new_buffer_with_bytes_sel,
+            .new_texture_with_descriptor_sel = new_texture_with_descriptor_sel,
+            .new_depth_stencil_state_sel = new_depth_stencil_state_sel,
         };
     }
 
@@ -184,6 +195,41 @@ pub const MTLDevice = struct {
         ) orelse return Error.MTLBufferCreationFailed;
 
         return MTLBuffer.init(buffer);
+    }
+
+    pub fn newTexture(
+        self: *const Self,
+        descriptor: MTLTextureDescriptor,
+    ) !MTLTexture {
+        const texture = objc.send_object_return(
+            self.device,
+            self.new_texture_with_descriptor_sel,
+            descriptor.descriptor,
+        ) orelse return Error.TextureCreationFailed;
+
+        return MTLTexture.init(texture);
+    }
+    pub fn newDepthStencilState(
+        self: *const Self,
+        descriptor: MTLDepthStencilDescriptor,
+    ) !MTLDepthStencilState {
+        const state = objc.send_object_return(
+            self.device,
+            self.new_depth_stencil_state_sel,
+            descriptor.descriptor,
+        ) orelse return error.DepthStencilStateCreationFailed;
+
+        return .{ .state = state };
+    }
+};
+
+pub const MTLDepthStencilState = struct {
+    state: objc.Id,
+
+    const Self = @This();
+
+    pub fn deinit(self: *const Self) void {
+        objc.release(self.state);
     }
 };
 
@@ -289,6 +335,7 @@ pub const MTLRenderCommandEncoder = struct {
     set_vertex_buffer_sel: objc.Sel,
     draw_indexed_primitives_sel: objc.Sel,
     set_vertex_bytes_sel: objc.Sel,
+    set_depth_stencil_state_sel: objc.Sel,
 
     const Self = @This();
 
@@ -310,6 +357,9 @@ pub const MTLRenderCommandEncoder = struct {
         const set_vertex_bytes_sel = objc.sel_registerName(
             "setVertexBytes:length:atIndex:",
         ) orelse return objc.Error.SelectorUnavailable;
+        const set_depth_stencil_state_sel = objc.sel_registerName(
+            "setDepthStencilState:",
+        ) orelse return objc.Error.SelectorUnavailable;
 
         return .{
             .encoder = encoder,
@@ -319,6 +369,7 @@ pub const MTLRenderCommandEncoder = struct {
             .set_vertex_buffer_sel = set_vertex_buffer_sel,
             .draw_indexed_primitives_sel = draw_indexed_primitives_sel,
             .set_vertex_bytes_sel = set_vertex_bytes_sel,
+            .set_depth_stencil_state_sel = set_depth_stencil_state_sel,
         };
     }
 
@@ -399,6 +450,16 @@ pub const MTLRenderCommandEncoder = struct {
             index,
         );
     }
+    pub fn setDepthStencilState(
+        self: *const Self,
+        state: MTLDepthStencilState,
+    ) void {
+        objc.send_object(
+            self.encoder,
+            self.set_depth_stencil_state_sel,
+            state.state,
+        );
+    }
 };
 
 pub const MTLTexture = struct {
@@ -409,30 +470,75 @@ pub const MTLTexture = struct {
     pub fn init(texture: objc.Id) Self {
         return .{ .texture = texture };
     }
+
+    pub fn deinit(self: *const Self) void {
+        objc.release(self.texture);
+    }
+};
+
+pub const MTLTextureDescriptor = struct {
+    descriptor: objc.Id,
+
+    const Self = @This();
+
+    pub fn initDepth(
+        width: usize,
+        height: usize,
+    ) !Self {
+        const cls = objc.objc_getClass("MTLTextureDescriptor") orelse
+            return objc.Error.ClassUnavailable;
+
+        const sel = objc.sel_registerName(
+            "texture2DDescriptorWithPixelFormat:width:height:mipmapped:",
+        ) orelse return objc.Error.SelectorUnavailable;
+
+        const SendFn = *const fn (
+            objc.Id,
+            objc.Sel,
+            usize,
+            usize,
+            usize,
+            bool,
+        ) callconv(.c) ?objc.Id;
+
+        const send: SendFn = @ptrCast(&objc.objc_msgSend);
+
+        const descriptor = send(
+            cls,
+            sel,
+            252, // MTLPixelFormat.depth32Float
+            width,
+            height,
+            false,
+        ) orelse return Error.TextureCreationFailed;
+
+        return .{ .descriptor = descriptor };
+    }
 };
 
 pub const MTLRenderPassDescriptor = struct {
     descriptor: objc.Id,
     color_attachments_sel: objc.Sel,
-
+    depth_attachment_sel: objc.Sel,
     const Self = @This();
 
     pub fn init() !Self {
         const render_pass_class = objc.objc_getClass("MTLRenderPassDescriptor") orelse
             return objc.Error.ClassUnavailable;
-
         const descriptor_sel = objc.sel_registerName("renderPassDescriptor") orelse
             return objc.Error.SelectorUnavailable;
-
         const descriptor = objc.send(render_pass_class, descriptor_sel) orelse
             return Error.RenderPassCreationFailed;
-
         const color_attachements_sel = objc.sel_registerName("colorAttachments") orelse
             return objc.Error.SelectorUnavailable;
+        const depth_attachment_sel = objc.sel_registerName(
+            "depthAttachment",
+        ) orelse return objc.Error.SelectorUnavailable;
 
         return .{
             .descriptor = descriptor,
             .color_attachments_sel = color_attachements_sel,
+            .depth_attachment_sel = depth_attachment_sel,
         };
     }
 
@@ -441,6 +547,75 @@ pub const MTLRenderPassDescriptor = struct {
             return Error.ColorAttachmentsUnavailable;
 
         return MTLRenderPassColorAttachmentDescriptorArray.init(attachments);
+    }
+
+    pub fn depthAttachment(self: *const Self) !MTLRenderPassDepthAttachmentDescriptor {
+        const attachment = objc.send(
+            self.descriptor,
+            self.depth_attachment_sel,
+        ) orelse return Error.DepthAttachmentUnavailable;
+
+        return try MTLRenderPassDepthAttachmentDescriptor.init(attachment);
+    }
+};
+
+pub const MTLRenderPassDepthAttachmentDescriptor = struct {
+    attachment: objc.Id,
+    set_texture_sel: objc.Sel,
+    set_load_action_sel: objc.Sel,
+    set_store_action_sel: objc.Sel,
+    set_clear_depth_sel: objc.Sel,
+
+    const Self = @This();
+
+    pub fn init(attachment: objc.Id) !Self {
+        return .{
+            .attachment = attachment,
+            .set_texture_sel = objc.sel_registerName("setTexture:") orelse
+                return objc.Error.SelectorUnavailable,
+            .set_load_action_sel = objc.sel_registerName("setLoadAction:") orelse
+                return objc.Error.SelectorUnavailable,
+            .set_store_action_sel = objc.sel_registerName("setStoreAction:") orelse
+                return objc.Error.SelectorUnavailable,
+            .set_clear_depth_sel = objc.sel_registerName("setClearDepth:") orelse
+                return objc.Error.SelectorUnavailable,
+        };
+    }
+
+    pub fn setTexture(self: *const Self, texture: MTLTexture) void {
+        objc.send_object(
+            self.attachment,
+            self.set_texture_sel,
+            texture.texture,
+        );
+    }
+
+    pub fn setLoadAction(self: *const Self, action: types.MTLLoadAction) void {
+        objc.send_usize(
+            self.attachment,
+            self.set_load_action_sel,
+            @backingInt(action),
+        );
+    }
+
+    pub fn setStoreAction(self: *const Self, action: types.MTLStoreAction) void {
+        objc.send_usize(
+            self.attachment,
+            self.set_store_action_sel,
+            @backingInt(action),
+        );
+    }
+
+    pub fn setClearDepth(self: *const Self, depth: f64) void {
+        const SendFn = *const fn (
+            objc.Id,
+            objc.Sel,
+            f64,
+        ) callconv(.c) void;
+
+        const send: SendFn = @ptrCast(&objc.objc_msgSend);
+
+        send(self.attachment, self.set_clear_depth_sel, depth);
     }
 };
 
@@ -579,40 +754,38 @@ pub const MTLRenderPipelineDescriptor = struct {
     set_vertex_function_sel: objc.Sel,
     set_fragment_function_sel: objc.Sel,
     color_attachments_sel: objc.Sel,
+    set_depth_attachment_pixel_format_sel: objc.Sel,
 
     const Self = @This();
 
     pub fn init() !Self {
         const cls = objc.objc_getClass("MTLRenderPipelineDescriptor") orelse
             return objc.Error.ClassUnavailable;
-
         const alloc_sel = objc.sel_registerName("alloc") orelse
             return objc.Error.SelectorUnavailable;
-
         const init_sel = objc.sel_registerName("init") orelse
             return objc.Error.SelectorUnavailable;
-
         const allocated = objc.send(cls, alloc_sel) orelse
             return Error.RenderPipelineDescriptorCreationFailed;
-
         const descriptor = objc.send(allocated, init_sel) orelse
             return Error.RenderPipelineDescriptorCreationFailed;
         errdefer objc.release(descriptor);
-
         const set_vertex_function_sel = objc.sel_registerName("setVertexFunction:") orelse
             return objc.Error.SelectorUnavailable;
-
         const set_fragment_function_sel = objc.sel_registerName("setFragmentFunction:") orelse
             return objc.Error.SelectorUnavailable;
-
         const color_attachments_sel = objc.sel_registerName("colorAttachments") orelse
             return objc.Error.SelectorUnavailable;
+        const set_depth_attachment_pixel_format_sel = objc.sel_registerName(
+            "setDepthAttachmentPixelFormat:",
+        ) orelse return objc.Error.SelectorUnavailable;
 
         return .{
             .descriptor = descriptor,
             .set_vertex_function_sel = set_vertex_function_sel,
             .set_fragment_function_sel = set_fragment_function_sel,
             .color_attachments_sel = color_attachments_sel,
+            .set_depth_attachment_pixel_format_sel = set_depth_attachment_pixel_format_sel,
         };
     }
 
@@ -634,8 +807,66 @@ pub const MTLRenderPipelineDescriptor = struct {
 
         return MTLRenderPipelineColorAttachmentDescriptorArray.init(attachments);
     }
-};
 
+    pub fn setDepthAttachmentPixelFormat(
+        self: *const Self,
+        format: types.MTLPixelFormat,
+    ) void {
+        objc.send_usize(
+            self.descriptor,
+            self.set_depth_attachment_pixel_format_sel,
+            @backingInt(format),
+        );
+    }
+};
+pub const MTLDepthStencilDescriptor = struct {
+    descriptor: objc.Id,
+
+    const Self = @This();
+
+    pub fn init() !Self {
+        const cls = objc.objc_getClass("MTLDepthStencilDescriptor") orelse
+            return objc.Error.ClassUnavailable;
+
+        const alloc_sel = objc.sel_registerName("alloc") orelse
+            return objc.Error.SelectorUnavailable;
+
+        const init_sel = objc.sel_registerName("init") orelse
+            return objc.Error.SelectorUnavailable;
+
+        const allocated = objc.send(cls, alloc_sel) orelse
+            return error.DepthStencilDescriptorCreationFailed;
+
+        const descriptor = objc.send(allocated, init_sel) orelse
+            return error.DepthStencilDescriptorCreationFailed;
+
+        return .{ .descriptor = descriptor };
+    }
+
+    pub fn setDepthCompareFunction(self: *const Self, function: usize) void {
+        const sel = objc.sel_registerName("setDepthCompareFunction:").?;
+
+        objc.send_usize(
+            self.descriptor,
+            sel,
+            function,
+        );
+    }
+
+    pub fn setDepthWriteEnabled(self: *const Self, enabled: bool) void {
+        const sel = objc.sel_registerName("setDepthWriteEnabled:").?;
+
+        objc.send_bool(
+            self.descriptor,
+            sel,
+            enabled,
+        );
+    }
+
+    pub fn deinit(self: *const Self) void {
+        objc.release(self.descriptor);
+    }
+};
 pub const MTLRenderPipelineState = struct {
     pipeline: objc.Id,
 

@@ -63,7 +63,17 @@ const projection = mat.perspective(
 );
 const view = mat.translation(.{ 0, 0, -3, 0 });
 
-const mvp = mat.mulMat(view, projection);
+const quat = z3d.math.quat;
+
+// const rotation = quat.fromAxisAngle(
+//     .{ 0, 1, 0, 0 },
+//     std.math.degreesToRadians(35.0),
+// );
+
+// const model = mat.fromQuat(rotation);
+
+// const view_model = mat.mulMat(model, view);
+// const mvp = mat.mulMat(view_model, projection);
 
 pub fn main() !void {
     try glfw.init();
@@ -92,6 +102,19 @@ pub fn main() !void {
 
     const mtl_device = try metal.MTLDevice.init();
     defer mtl_device.deinit();
+
+    const initial_framebuffer_size = window.getFramebufferSize();
+
+    var depth_width: usize = @intCast(@max(initial_framebuffer_size[0], 1));
+    var depth_height: usize = @intCast(@max(initial_framebuffer_size[1], 1));
+
+    const depth_desc = try metal.MTLTextureDescriptor.initDepth(
+        depth_width,
+        depth_height,
+    );
+
+    var depth_texture = try mtl_device.newTexture(depth_desc);
+    defer depth_texture.deinit();
 
     const vertex_buffer = try mtl_device.newBuffer(
         std.mem.sliceAsBytes(vertices[0..]),
@@ -127,6 +150,7 @@ pub fn main() !void {
     const pipeline_attachment = try pipeline_attachments.sub(0);
 
     pipeline_attachment.setPixelFormat(.bgra8_unorm);
+    pipeline_desc.setDepthAttachmentPixelFormat(.depth32_float);
 
     const pipeline = try mtl_device.newRenderPipelineState(pipeline_desc);
     defer pipeline.deinit();
@@ -147,10 +171,13 @@ pub fn main() !void {
     var b: f64 = 0.0;
     var a: f64 = 0.0;
 
+    var angle: f32 = 0.0;
+    var last_time = glfw.getTime();
+
     while (!window.shouldClose()) : ({
         r += 0.0035;
         g += 0.0015;
-        b += 0.0025;
+        b += 0.01;
         a += 0.0005;
     }) {
         if (r >= 2) {
@@ -158,6 +185,20 @@ pub fn main() !void {
         }
 
         glfw.pollEvents();
+        const now = glfw.getTime();
+        const delta_time: f32 = @floatCast(now - last_time);
+        last_time = now;
+
+        angle += std.math.degreesToRadians(45.0) * delta_time;
+
+        const rotation = quat.fromAxisAngle(
+            .{ 2, 1, 1, 0 },
+            angle,
+        );
+
+        const model = mat.fromQuat(rotation);
+        const view_model = mat.mulMat(model, view);
+        const mvp = mat.mulMat(view_model, projection);
 
         const pool = objc.objc_autoreleasePoolPush();
         defer objc.objc_autoreleasePoolPop(pool);
@@ -168,6 +209,23 @@ pub fn main() !void {
 
         if (framebuffer_size[0] <= 0 or framebuffer_size[1] <= 0) {
             continue;
+        }
+
+        const width: usize = @intCast(framebuffer_size[0]);
+        const height: usize = @intCast(framebuffer_size[1]);
+
+        if (width != depth_width or height != depth_height) {
+            depth_texture.deinit();
+
+            depth_width = width;
+            depth_height = height;
+
+            const desc = try metal.MTLTextureDescriptor.initDepth(
+                width,
+                height,
+            );
+
+            depth_texture = try mtl_device.newTexture(desc);
         }
 
         metal_layer.setDrawableSize(
@@ -194,13 +252,31 @@ pub fn main() !void {
             .alpha = a,
         });
 
+        const depth_attachment = try mtl_render_pass_descriptor.depthAttachment();
+
+        depth_attachment.setTexture(depth_texture);
+        depth_attachment.setLoadAction(.clear);
+        depth_attachment.setStoreAction(.dont_care);
+        depth_attachment.setClearDepth(1.0);
+
+        const depth_stencil_desc = try metal.MTLDepthStencilDescriptor.init();
+        defer depth_stencil_desc.deinit();
+
+        depth_stencil_desc.setDepthCompareFunction(1);
+        depth_stencil_desc.setDepthWriteEnabled(true);
+
+        const depth_state = try mtl_device.newDepthStencilState(depth_stencil_desc);
+        defer depth_state.deinit();
+
         const encoder = try cmd_buffer.renderCommandEncoder(
             mtl_render_pass_descriptor,
         );
 
         encoder.setRenderPipelineState(pipeline);
+        encoder.setDepthStencilState(depth_state);
         encoder.setVertexBuffer(vertex_buffer, 0, 0);
         encoder.setVertexBytes(std.mem.asBytes(&mvp), 1);
+        // std.debug.print("angle: {d:.2}\n", .{angle});
 
         encoder.drawIndexedPrimitives(
             .triangle,
