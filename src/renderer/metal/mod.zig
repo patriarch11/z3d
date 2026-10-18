@@ -1,3 +1,9 @@
+pub const device = @import("device.zig");
+pub const buffer = @import("buffer.zig");
+
+pub const Device = device.Device;
+pub const Buffer = buffer.Buffer;
+
 // TODO: split and refactor this module
 // splitting starts from ./device.zig
 const std = @import("std");
@@ -65,8 +71,8 @@ pub const CAMetalLayer = struct {
         };
     }
 
-    pub fn setDevice(self: *const Self, device: MTLDevice) void {
-        objc.send_object(self.metal_layer, self.set_device_sel, device.device);
+    pub fn setDevice(self: *const Self, device_: MTLDevice) void {
+        objc.send_object(self.metal_layer, self.set_device_sel, device_.device);
     }
 
     pub fn nextDrawable(self: *const Self) !?CAMetalDrawable {
@@ -111,6 +117,7 @@ pub const CAMetalDrawable = struct {
     }
 };
 
+/// deprecated, use metal.device.Device instead
 pub const MTLDevice = struct {
     device: objc.Id,
     new_queue_sel: objc.Sel,
@@ -122,7 +129,7 @@ pub const MTLDevice = struct {
     const Self = @This();
 
     pub fn init() !Self {
-        const device = MTLCreateSystemDefaultDevice() orelse
+        const _device = MTLCreateSystemDefaultDevice() orelse
             return Error.MTLDeviceUnavailable;
 
         const new_queue_sel = objc.sel_registerName("newCommandQueue") orelse
@@ -141,7 +148,7 @@ pub const MTLDevice = struct {
         ) orelse return objc.Error.SelectorUnavailable;
 
         return .{
-            .device = device,
+            .device = _device,
             .new_queue_sel = new_queue_sel,
             .new_render_pipeline_state_sel = new_render_pipeline_state_sel,
             .new_buffer_with_bytes_sel = new_buffer_with_bytes_sel,
@@ -188,7 +195,7 @@ pub const MTLDevice = struct {
         self: *const Self,
         data: []const u8,
     ) !MTLBuffer {
-        const buffer = send_new_buffer(
+        const _buffer = send_new_buffer(
             self.device,
             self.new_buffer_with_bytes_sel,
             data.ptr,
@@ -196,7 +203,7 @@ pub const MTLDevice = struct {
             0,
         ) orelse return Error.MTLBufferCreationFailed;
 
-        return MTLBuffer.init(buffer);
+        return MTLBuffer.init(_buffer);
     }
 
     pub fn newTexture(
@@ -240,8 +247,8 @@ pub const MTLBuffer = struct {
 
     const Self = @This();
 
-    pub fn init(buffer: objc.Id) Self {
-        return .{ .buffer = buffer };
+    pub fn init(_buffer: objc.Id) Self {
+        return .{ .buffer = _buffer };
     }
 
     pub fn deinit(self: *const Self) void {
@@ -270,10 +277,10 @@ pub const MTLCommandQueue = struct {
     }
 
     pub fn commandBuffer(self: *const Self) !MTLCommandBuffer {
-        const buffer = objc.send(self.command_queue, self.cmd_buffer_sel) orelse
+        const _buffer = objc.send(self.command_queue, self.cmd_buffer_sel) orelse
             return Error.CommandBufferCreationFailed;
 
-        return try MTLCommandBuffer.init(buffer);
+        return try MTLCommandBuffer.init(_buffer);
     }
 };
 
@@ -285,7 +292,7 @@ pub const MTLCommandBuffer = struct {
 
     const Self = @This();
 
-    pub fn init(buffer: objc.Id) !Self {
+    pub fn init(_buffer: objc.Id) !Self {
         const render_cmd_encoder_with_desc_sel = objc.sel_registerName(
             "renderCommandEncoderWithDescriptor:",
         ) orelse return objc.Error.SelectorUnavailable;
@@ -297,7 +304,7 @@ pub const MTLCommandBuffer = struct {
             return objc.Error.SelectorUnavailable;
 
         return .{
-            .buffer = buffer,
+            .buffer = _buffer,
             .render_cmd_encoder_with_desc_sel = render_cmd_encoder_with_desc_sel,
             .present_drawable_sel = present_drawable_sel,
             .commit_sel = commit_sel,
@@ -407,14 +414,14 @@ pub const MTLRenderCommandEncoder = struct {
 
     pub fn setVertexBuffer(
         self: *const Self,
-        buffer: MTLBuffer,
+        _buffer: MTLBuffer,
         offset: usize,
         index: usize,
     ) void {
         send_vertex_buffer(
             self.encoder,
             self.set_vertex_buffer_sel,
-            buffer.buffer,
+            _buffer.buffer,
             offset,
             index,
         );
@@ -890,7 +897,7 @@ pub const MTLLibrary = struct {
     const Self = @This();
 
     pub fn init(
-        device: MTLDevice,
+        _device: MTLDevice,
         path: [*:0]const u8,
     ) !Self {
         const selector = objc.sel_registerName("newLibraryWithFile:error:") orelse
@@ -901,7 +908,7 @@ pub const MTLLibrary = struct {
         var ns_error: ?objc.NsError = null;
 
         const library = objc.send_object_error(
-            device.device,
+            _device.device,
             selector,
             ns_path,
             &ns_error,
