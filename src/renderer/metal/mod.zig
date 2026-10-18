@@ -1,3 +1,5 @@
+// TODO: split and refactor this module
+// splitting starts from ./device.zig
 const std = @import("std");
 const objc = @import("z3d").platform.macos.objc;
 const types = @import("types.zig");

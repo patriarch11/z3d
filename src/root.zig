@@ -12,6 +12,7 @@ pub const platform = struct {
 };
 
 pub const renderer = struct {
+    pub const rhi = @import("renderer/rhi/mod.zig");
     pub const metal = @import("renderer/metal/mod.zig");
 };
 
