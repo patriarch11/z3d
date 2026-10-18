@@ -9,6 +9,8 @@ const send_size: types.SendSizeFn = @ptrCast(&objc.objc_msgSend);
 const send_draw_primitives: types.SendDrawPrimitivesFn = @ptrCast(&objc.objc_msgSend);
 const send_new_buffer: types.SendNewBufferFn = @ptrCast(&objc.objc_msgSend);
 const send_vertex_buffer: types.SendVertexBufferFn = @ptrCast(&objc.objc_msgSend);
+const send_draw_indexed_primitives: types.SendDrawIndexedPrimitivesFn = @ptrCast(&objc.objc_msgSend);
+const send_vertex_bytes: types.SendVertexBytesFn = @ptrCast(&objc.objc_msgSend);
 
 pub const Error = error{
     CAMetalLayerCreationFailed,
@@ -285,6 +287,8 @@ pub const MTLRenderCommandEncoder = struct {
     set_render_pipeline_state_sel: objc.Sel,
     draw_primitives_sel: objc.Sel,
     set_vertex_buffer_sel: objc.Sel,
+    draw_indexed_primitives_sel: objc.Sel,
+    set_vertex_bytes_sel: objc.Sel,
 
     const Self = @This();
 
@@ -300,6 +304,12 @@ pub const MTLRenderCommandEncoder = struct {
         const set_vertex_buffer_sel = objc.sel_registerName(
             "setVertexBuffer:offset:atIndex:",
         ) orelse return objc.Error.SelectorUnavailable;
+        const draw_indexed_primitives_sel = objc.sel_registerName(
+            "drawIndexedPrimitives:indexCount:indexType:indexBuffer:indexBufferOffset:",
+        ) orelse return objc.Error.SelectorUnavailable;
+        const set_vertex_bytes_sel = objc.sel_registerName(
+            "setVertexBytes:length:atIndex:",
+        ) orelse return objc.Error.SelectorUnavailable;
 
         return .{
             .encoder = encoder,
@@ -307,6 +317,8 @@ pub const MTLRenderCommandEncoder = struct {
             .set_render_pipeline_state_sel = set_render_pipeline_state_sel,
             .draw_primitives_sel = draw_primitives_sel,
             .set_vertex_buffer_sel = set_vertex_buffer_sel,
+            .draw_indexed_primitives_sel = draw_indexed_primitives_sel,
+            .set_vertex_bytes_sel = set_vertex_bytes_sel,
         };
     }
 
@@ -351,6 +363,39 @@ pub const MTLRenderCommandEncoder = struct {
             self.set_vertex_buffer_sel,
             buffer.buffer,
             offset,
+            index,
+        );
+    }
+
+    pub fn drawIndexedPrimitives(
+        self: *const Self,
+        primitive: types.MTLPrimitiveType,
+        index_count: usize,
+        index_type: types.MTLIndexType,
+        index_buffer: MTLBuffer,
+        offset: usize,
+    ) void {
+        send_draw_indexed_primitives(
+            self.encoder,
+            self.draw_indexed_primitives_sel,
+            @backingInt(primitive),
+            index_count,
+            @backingInt(index_type),
+            index_buffer.buffer,
+            offset,
+        );
+    }
+
+    pub fn setVertexBytes(
+        self: *const Self,
+        data: []const u8,
+        index: usize,
+    ) void {
+        send_vertex_bytes(
+            self.encoder,
+            self.set_vertex_bytes_sel,
+            data.ptr,
+            data.len,
             index,
         );
     }

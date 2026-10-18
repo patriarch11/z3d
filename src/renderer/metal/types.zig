@@ -37,6 +37,24 @@ pub const SendVertexBufferFn = *const fn (
     usize,
 ) callconv(.c) void;
 
+pub const SendDrawIndexedPrimitivesFn = *const fn (
+    objc.Id,
+    objc.Sel,
+    usize, // primitive type
+    usize, // index count
+    usize, // index type
+    objc.Id, // index buffer
+    usize, // index buffer offset
+) callconv(.c) void;
+
+pub const SendVertexBytesFn = *const fn (
+    objc.Id,
+    objc.Sel,
+    *const anyopaque,
+    usize,
+    usize,
+) callconv(.c) void;
+
 pub const MTLLoadAction = enum(usize) {
     dont_care = 0,
     load = 1,
@@ -66,4 +84,9 @@ pub const MTLPrimitiveType = enum(usize) {
     line_strip = 2,
     triangle = 3,
     triangle_strip = 4,
+};
+
+pub const MTLIndexType = enum(usize) {
+    uint16 = 0,
+    uint32 = 1,
 };
