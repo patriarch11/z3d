@@ -24,7 +24,7 @@ pub const Buffer = struct {
         self.* = undefined;
     }
 
-    pub fn write(self: *Self, offset: usize, data: []const u8) !void { // TODO: continue from here
+    pub fn write(self: *const Self, offset: usize, data: []const u8) !void { // TODO: continue from here
         if (offset > self.size or
             data.len > self.size - offset)
         {

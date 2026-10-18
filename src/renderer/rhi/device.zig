@@ -39,7 +39,7 @@ pub fn Device(comptime Impl: type) type {
             };
         }
 
-        pub fn writeBuffer(self: *const Self, buff: *buffer.Buffer, offset: usize, data: []const u8) !void {
+        pub fn writeBuffer(self: *const Self, buff: *const buffer.Buffer(Impl.Buffer), offset: usize, data: []const u8) !void {
             return try self.impl.writeBuffer(buff, offset, data);
         }
     };

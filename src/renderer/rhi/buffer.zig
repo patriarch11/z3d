@@ -40,7 +40,7 @@ pub fn Buffer(comptime Impl: type) type {
             self.* = undefined;
         }
 
-        pub fn write(self: *Self, offset: usize, data: []const u8) !void {
+        pub fn write(self: *const Self, offset: usize, data: []const u8) !void {
             try self.impl.write(offset, data);
         }
     };

@@ -53,7 +53,7 @@ pub const Device = struct {
         return .{ .handle = handle, .size = desc.size };
     }
 
-    pub fn writeBuffer(self: *const Self, buff: *buffer.Buffer, offset: usize, data: []const u8) !void {
+    pub fn writeBuffer(self: *const Self, buff: *const rhi_buffer.Buffer(buffer.Buffer), offset: usize, data: []const u8) !void {
         _ = self;
         try buff.write(offset, data);
     }

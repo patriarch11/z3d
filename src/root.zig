@@ -3,6 +3,7 @@ const std = @import("std");
 const Io = std.Io;
 
 pub const math = @import("math/mod.zig");
+pub const geometry = @import("geometry/mod.zig");
 
 pub const platform = struct {
     pub const macos = struct {
