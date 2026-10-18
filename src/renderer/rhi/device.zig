@@ -22,12 +22,10 @@ pub fn Device(comptime Impl: type) type {
 
         pub fn deinit(self: *Self) void {
             self.impl.deinit();
+            self.* = undefined;
         }
 
-        pub fn createBuffer(
-            self: *const Self,
-            desc: buffer.BufferDesc,
-        ) Error!buffer.Buffer(Impl.Buffer) {
+        pub fn createBuffer(self: *const Self, desc: buffer.BufferDesc) Error!buffer.Buffer(Impl.Buffer) {
             if (desc.size == 0) {
                 return Error.InvalidBufferUsage;
             }
@@ -39,6 +37,10 @@ pub fn Device(comptime Impl: type) type {
             return .{
                 .impl = try self.impl.createBuffer(desc),
             };
+        }
+
+        pub fn writeBuffer(self: *const Self, buff: *buffer.Buffer, offset: usize, data: []const u8) !void {
+            return try self.impl.writeBuffer(buff, offset, data);
         }
     };
 }

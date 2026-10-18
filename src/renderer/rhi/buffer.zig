@@ -37,6 +37,11 @@ pub fn Buffer(comptime Impl: type) type {
 
         pub fn deinit(self: *Self) void {
             self.impl.deinit();
+            self.* = undefined;
+        }
+
+        pub fn write(self: *Self, offset: usize, data: []const u8) !void {
+            try self.impl.write(offset, data);
         }
     };
 }

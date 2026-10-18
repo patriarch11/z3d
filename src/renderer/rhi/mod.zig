@@ -1,6 +1,10 @@
-const metal = @import("../metal/mod.zig"); // TODO: use absolute import path after new api would be done
 pub const device = @import("device.zig");
 pub const buffer = @import("buffer.zig");
+pub const errors = @import("errors.zig");
+
+const z3d = @import("z3d");
+
+const metal = z3d.renderer.metal;
 
 pub const Backend = enum {
     metal,
