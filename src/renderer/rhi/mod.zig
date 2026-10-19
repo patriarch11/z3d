@@ -1,6 +1,7 @@
 pub const device = @import("device.zig");
 pub const buffer = @import("buffer.zig");
 pub const errors = @import("errors.zig");
+pub const surface = @import("surface.zig");
 
 const z3d = @import("z3d");
 
@@ -22,5 +23,6 @@ pub fn API(comptime backend: Backend) type {
     return struct {
         pub const Device = device.Device(Impl);
         pub const Buffer = buffer.Buffer(Impl.Buffer);
+        pub const Surface = surface.Surface(Impl);
     };
 }

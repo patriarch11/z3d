@@ -17,6 +17,8 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    z3d.addImport("zglfw", zglfw.module("root"));
+
     //------------------------
     // example cube render with low-lewel metal api
     //------------------------

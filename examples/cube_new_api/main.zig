@@ -2,9 +2,9 @@ const z3d = @import("z3d");
 const std = @import("std");
 
 const rhi = z3d.renderer.rhi;
-const gfx = rhi.API(.metal);
 
 const Vertex = z3d.geometry.vertex.PositionColor;
+const Window = z3d.platform.window.Window;
 
 const vertices = [_]Vertex{
     // Front
@@ -47,8 +47,22 @@ const indices = [_]u16{
 };
 
 pub fn main() !void {
+    const gfx = rhi.API(.metal);
+
     var device = try gfx.Device.init();
     defer device.deinit();
+
+    var window = try Window.init(.{
+        .width = 1280,
+        .height = 720,
+        .title = "z3d",
+    });
+    defer window.deinit();
+
+    const native_window = try window.nativeHandle();
+
+    var surface = try gfx.Surface.init(&device, native_window);
+    defer surface.deinit();
 
     var vertex_buffer = try device.createBuffer(.{
         .size = @sizeOf(Vertex) * vertices.len,

@@ -32,6 +32,12 @@ pub const SendObjectFn = *const fn (
     Id,
 ) callconv(.c) void;
 
+pub const SendOptionalObjectFn = *const fn (
+    Id,
+    Sel,
+    ?Id,
+) callconv(.c) void;
+
 pub const SendVoidFn = *const fn (
     Id,
     Sel,
@@ -71,6 +77,7 @@ pub const SendObjectErrorFn = *const fn (
 pub const send: SendFn = @ptrCast(&objc_msgSend);
 pub const send_bool: SendBoolFn = @ptrCast(&objc_msgSend);
 pub const send_object: SendObjectFn = @ptrCast(&objc_msgSend);
+pub const send_optional_object: SendOptionalObjectFn = @ptrCast(&objc_msgSend);
 pub const send_void: SendVoidFn = @ptrCast(&objc_msgSend);
 pub const send_index: SendIndexFn = @ptrCast(&objc_msgSend);
 pub const send_usize: SendUsizeFn = @ptrCast(&objc_msgSend);

@@ -4,4 +4,6 @@ pub const Error = error{
     InvalidBufferUsage,
     BufferOutOfBounds,
     BufferNotMappable,
+    UnsupportedWindowHandle,
+    SurfaceCreationFailed,
 };

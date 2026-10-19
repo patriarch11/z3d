@@ -6,6 +6,7 @@ pub const math = @import("math/mod.zig");
 pub const geometry = @import("geometry/mod.zig");
 
 pub const platform = struct {
+    pub const window = @import("platform/window.zig");
     pub const macos = struct {
         pub const objc = @import("platform/macos/objc.zig");
         pub const cocoa = @import("platform/macos/cocoa.zig");

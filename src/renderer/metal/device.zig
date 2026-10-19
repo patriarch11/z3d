@@ -3,7 +3,6 @@ const buffer = @import("buffer.zig");
 
 const objc = z3d.platform.macos.objc;
 const errors = z3d.renderer.rhi.errors;
-const rhi_device = z3d.renderer.rhi.device;
 const rhi_buffer = z3d.renderer.rhi.buffer;
 
 const Error = errors.Error;
@@ -25,7 +24,7 @@ pub const Device = struct {
 
     const Self = @This();
 
-    pub fn init() rhi_device.InitError!Self {
+    pub fn init() !Self {
         const handle = MTLCreateSystemDefaultDevice() orelse
             return Error.DeviceUnavailable;
         const new_buffer_sel = objc.sel_registerName("newBufferWithLength:options:") orelse
@@ -42,7 +41,7 @@ pub const Device = struct {
         self.* = undefined;
     }
 
-    pub fn createBuffer(self: *const Self, desc: rhi_buffer.BufferDesc) Error!buffer.Buffer {
+    pub fn createBuffer(self: *const Self, desc: rhi_buffer.BufferDesc) !buffer.Buffer {
         const handle = send_new_buffer_with_lenght_fn(
             self.handle,
             self.new_buffer_sel,

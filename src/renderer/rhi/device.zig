@@ -6,15 +6,13 @@ const objc = z3d.platform.macos.objc;
 
 const Error = errors.Error;
 
-pub const InitError = objc.Error || Error;
-
 pub fn Device(comptime Impl: type) type {
     return struct {
         impl: Impl.Device,
 
         const Self = @This();
 
-        pub fn init() InitError!Self {
+        pub fn init() !Self {
             return .{
                 .impl = try Impl.Device.init(),
             };
@@ -25,7 +23,7 @@ pub fn Device(comptime Impl: type) type {
             self.* = undefined;
         }
 
-        pub fn createBuffer(self: *const Self, desc: buffer.BufferDesc) Error!buffer.Buffer(Impl.Buffer) {
+        pub fn createBuffer(self: *const Self, desc: buffer.BufferDesc) !buffer.Buffer(Impl.Buffer) {
             if (desc.size == 0) {
                 return Error.InvalidBufferUsage;
             }

@@ -1,11 +1,12 @@
 pub const device = @import("device.zig");
 pub const buffer = @import("buffer.zig");
+pub const surface = @import("surface.zig");
 
 pub const Device = device.Device;
 pub const Buffer = buffer.Buffer;
+pub const Surface = surface.Surface;
 
-// TODO: split and refactor this module
-// splitting starts from ./device.zig
+// TODO: split and remove code below
 const std = @import("std");
 const objc = @import("z3d").platform.macos.objc;
 const types = @import("types.zig");
